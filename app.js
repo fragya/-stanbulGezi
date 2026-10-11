@@ -212,13 +212,16 @@ function updateMapMarkers(placesToShow) {
 
     const marker = L.marker(latlng, { icon: customIcon });
 
+    const popupImg = place.image ? `<img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-24 object-cover rounded-xl mb-2" />` : '';
+
     const popupHtml = `
-      <div class="p-2 min-w-[200px]">
+      <div class="p-2 min-w-[210px] max-w-[240px]">
+        ${popupImg}
         <div class="flex items-center justify-between gap-2 mb-1">
           <span class="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">${escapeHtml(place.district)}</span>
           <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">★ ${Number(place.score).toFixed(1)}/10</span>
         </div>
-        <h4 class="font-bold text-slate-900 text-sm mb-1">${escapeHtml(place.name)}</h4>
+        <h4 class="font-bold text-slate-900 text-sm mb-0.5">${escapeHtml(place.name)}</h4>
         <p class="text-xs text-slate-500 mb-2">🏷️ ${escapeHtml(place.category)}</p>
         ${place.favorite ? `<p class="text-xs text-slate-700 bg-slate-50 p-1.5 rounded mb-2"><strong>Favori:</strong> ${escapeHtml(place.favorite)}</p>` : ''}
         <button onclick="window.focusPlaceCard('${place.id}')" class="w-full text-center text-xs py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded transition">
@@ -326,8 +329,17 @@ function renderPlaces() {
       ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}` 
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
 
+    // Mekan Fotoğrafı HTML (Varsa şık kapak banner'ı)
+    const imageHtml = place.image ? `
+      <div class="relative w-full h-36 rounded-2xl overflow-hidden mb-3 border border-slate-100 shadow-inner group-hover:scale-[1.01] transition duration-300">
+        <img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-full object-cover" loading="lazy" />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+      </div>
+    ` : '';
+
     card.innerHTML = `
       <div>
+        ${imageHtml}
         <div class="flex items-start justify-between gap-3 mb-2.5">
           <div class="space-y-1">
             <div class="flex items-center gap-1.5 flex-wrap">
@@ -653,6 +665,22 @@ window.editPlace = function(id) {
   document.getElementById("modalPlaceLat").value = p.lat || "";
   document.getElementById("modalPlaceLng").value = p.lng || "";
 
+  // Fotoğraf yükleme alanını doldur
+  const imgDataInput = document.getElementById("modalPlaceImageData");
+  const imgPreviewContainer = document.getElementById("imagePreviewContainer");
+  const imgPreview = document.getElementById("imagePreview");
+  if (imgDataInput && imgPreviewContainer && imgPreview) {
+    if (p.image) {
+      imgDataInput.value = p.image;
+      imgPreview.src = p.image;
+      imgPreviewContainer.classList.remove("hidden");
+    } else {
+      imgDataInput.value = "";
+      imgPreview.src = "";
+      imgPreviewContainer.classList.add("hidden");
+    }
+  }
+
   openModal();
 };
 
@@ -830,6 +858,9 @@ function setupEventListeners() {
   // Google Maps ve Hızlı Arama
   setupQuickSearch();
 
+  // Fotoğraf Yükleme ve Önizleme
+  setupImageUpload();
+
   // Form submit
   document.getElementById("placeForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -875,6 +906,16 @@ function openNewPlaceModalDirect() {
   const dropdown = document.getElementById("searchResultsDropdown");
   if (dropdown) dropdown.classList.add("hidden");
 
+  // Fotoğraf alanını sıfırla
+  const imgData = document.getElementById("modalPlaceImageData");
+  if (imgData) imgData.value = "";
+  const imgPreviewContainer = document.getElementById("imagePreviewContainer");
+  if (imgPreviewContainer) imgPreviewContainer.classList.add("hidden");
+  const imgPreview = document.getElementById("imagePreview");
+  if (imgPreview) imgPreview.src = "";
+  const imgFile = document.getElementById("modalPlaceImageInput");
+  if (imgFile) imgFile.value = "";
+
   openModal();
 }
 
@@ -895,6 +936,7 @@ function savePlaceFromModal() {
   const score = parseFloat(document.getElementById("modalPlaceScore").value);
   const favorite = document.getElementById("modalPlaceFavorite").value.trim();
   const notes = document.getElementById("modalPlaceNotes").value.trim();
+  const image = document.getElementById("modalPlaceImageData") ? document.getElementById("modalPlaceImageData").value : "";
   
   let lat = parseFloat(document.getElementById("modalPlaceLat").value);
   let lng = parseFloat(document.getElementById("modalPlaceLng").value);
@@ -911,8 +953,8 @@ function savePlaceFromModal() {
     // Güncelleme
     const index = places.findIndex(p => p.id === id);
     if (index !== -1) {
-      places[index] = { ...places[index], name, district, category, score, favorite, notes, lat, lng };
-      showToast("Mekan bilgileri güncellendi.");
+      places[index] = { ...places[index], name, district, category, score, favorite, notes, image, lat, lng };
+      showToast("Mekan ve fotoğraf güncellendi. ✅");
     }
   } else {
     // Yeni ekleme
@@ -924,12 +966,13 @@ function savePlaceFromModal() {
       score,
       favorite,
       notes,
+      image,
       lat,
       lng,
       createdAt: Date.now()
     };
     places.unshift(newPlace);
-    showToast("Yeni mekan listenize eklendi! ✨");
+    showToast("Yeni mekan ve fotoğraf kaydedildi! ✨");
   }
 
   savePlaces();
@@ -1303,6 +1346,72 @@ function autoDetectCategoryAndDistrict(name, lat, lng) {
     document.getElementById("modalPlaceCategory").value = "Sokak Lezzeti";
   } else if (nameLower.includes("bar") || nameLower.includes("pub") || nameLower.includes("meyhane")) {
     document.getElementById("modalPlaceCategory").value = "Meyhane / Bar";
+  }
+}
+
+// -------------------------------------------------------------
+// FOTOĞRAF YÜKLEME & OTOMATİK BOYUTLANDIRMA (Canvas Optimizer)
+// -------------------------------------------------------------
+function setupImageUpload() {
+  const fileInput = document.getElementById("modalPlaceImageInput");
+  const dataInput = document.getElementById("modalPlaceImageData");
+  const preview = document.getElementById("imagePreview");
+  const container = document.getElementById("imagePreviewContainer");
+  const removeBtn = document.getElementById("removeImageBtn");
+
+  if (!fileInput) return;
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Fotoğrafı tarayıcıda Canvas ile optimize et (Hafıza dostu ~800px JPEG)
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        // Maksimum 800px genişlik / yükseklik oranla
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 800;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Kaliteli JPEG olarak küçültüp Base64 al
+        const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
+
+        dataInput.value = optimizedDataUrl;
+        preview.src = optimizedDataUrl;
+        container.classList.remove("hidden");
+        initIcons();
+        showToast("Fotoğraf optimize edildi ve eklendi! 📸");
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  if (removeBtn) {
+    removeBtn.addEventListener("click", () => {
+      fileInput.value = "";
+      dataInput.value = "";
+      preview.src = "";
+      container.classList.add("hidden");
+      showToast("Fotoğraf kaldırıldı.");
+    });
   }
 }
 
