@@ -718,23 +718,31 @@ function switchTab(tab) {
     if (leftCol && isMobile) leftCol.classList.add("hidden");
     if (rightCol) {
       rightCol.classList.remove("hidden");
-      rightCol.classList.remove("lg:flex"); // zorla göster
-      rightCol.classList.add("flex");
+      rightCol.style.display = "flex";
     }
 
     if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-blue-600 bg-white shadow-sm flex items-center justify-center gap-1.5";
     if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-blue-500 font-bold text-[10px]";
 
-    setTimeout(() => {
+    // Haritayı hemen ve 150ms sonra tekrar tazele
+    const refreshMap = () => {
       if (map) {
         map.invalidateSize();
         const filtered = getFilteredPlaces();
         if (filtered.length > 0) {
           const latlngs = filtered.filter(p => p.lat && p.lng).map(p => [p.lat, p.lng]);
-          if (latlngs.length > 0) map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] });
+          if (latlngs.length > 0) {
+            map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40], maxZoom: 14 });
+          }
+        } else {
+          map.setView([41.0082, 28.9784], 12);
         }
       }
-    }, 200);
+    };
+
+    refreshMap();
+    setTimeout(refreshMap, 150);
+    setTimeout(refreshMap, 350);
   } else if (tab === 'route') {
     if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
     if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
@@ -1117,6 +1125,7 @@ function handleGoogleMapsLink(url) {
 }
 
 // Google Maps Tarzı Canlı Arama Motoru (Photon + Nominatim Hibrit)
+// Google Maps Tarzı Canlı Arama Motoru (İstanbul Odaklı BBOX + Nominatim)
 async function fetchPlaceSuggestions(query) {
   const dropdown = document.getElementById("searchResultsDropdown");
   const spinner = document.getElementById("searchSpinner");
@@ -1124,8 +1133,9 @@ async function fetchPlaceSuggestions(query) {
   let results = [];
 
   try {
-    // 1. Photon API (Mekan ve restoran aramalarında son derece hızlı ve esnektir)
-    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=41.0082&lon=28.9784&limit=7`;
+    // 1. Photon API - Kesin İstanbul Koordinat Sınırları (bbox: 28.0, 40.7, 29.9, 41.6)
+    // Bu sayede İngiltere, Kıbrıs veya Yunanistan asla gelmez, SADECE İstanbul mekanları listelenir!
+    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=28.0,40.7,29.9,41.6&limit=10`;
     const res = await fetch(photonUrl);
     const data = await res.json();
 
@@ -1134,13 +1144,13 @@ async function fetchPlaceSuggestions(query) {
         const p = f.properties || {};
         const coords = f.geometry && f.geometry.coordinates ? f.geometry.coordinates : [28.9784, 41.0082];
         const name = p.name || query;
-        const district = p.district || p.suburb || p.city || p.locality || p.county || "İstanbul";
+        const district = p.district || p.locality || p.city || p.suburb || p.county || "İstanbul";
         const street = p.street ? `${p.street}` : "";
         const category = p.osm_value || p.osm_key || "";
         return {
           name: name,
           district: district,
-          subtitle: [street, district, p.state || "İstanbul"].filter(Boolean).join(", "),
+          subtitle: [street, district, "İstanbul"].filter(Boolean).join(", "),
           category: category,
           lat: coords[1],
           lng: coords[0]
@@ -1151,10 +1161,10 @@ async function fetchPlaceSuggestions(query) {
     console.warn("Photon search fallback:", err);
   }
 
-  // Eğer Photon az sonuç verdiyse veya hata aldıysa Nominatim ile tamamla
+  // Eğer Photon ile az sonuç geldiyse Nominatim İstanbul ile destekle
   if (results.length === 0) {
     try {
-      const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' İstanbul')}&format=json&addressdetails=1&limit=5&accept-language=tr`;
+      const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' İstanbul')}&format=json&addressdetails=1&countrycodes=tr&viewbox=28.0,41.5,29.9,40.7&bounded=1&limit=6&accept-language=tr`;
       const nomRes = await fetch(nomUrl);
       const nomData = await nomRes.json();
       if (nomData && nomData.length > 0) {
@@ -1165,7 +1175,7 @@ async function fetchPlaceSuggestions(query) {
           return {
             name: mainName,
             district: district,
-            subtitle: item.display_name.split(",").slice(1, 4).join(",").trim(),
+            subtitle: item.display_name.split(",").slice(1, 3).join(",").trim(),
             category: item.type || item.category || "",
             lat: parseFloat(item.lat),
             lng: parseFloat(item.lon)
@@ -1182,7 +1192,7 @@ async function fetchPlaceSuggestions(query) {
   if (results.length === 0) {
     dropdown.innerHTML = `
       <div class="p-3 text-center">
-        <p class="text-xs font-semibold text-slate-700">Mekan bulunamadı</p>
+        <p class="text-xs font-semibold text-slate-700">İstanbul'da mekan bulunamadı</p>
         <p class="text-[11px] text-slate-400 mt-0.5">"${escapeHtml(query)}" adını doğrudan form alanına yazabilirsiniz.</p>
       </div>`;
     dropdown.classList.remove("hidden");
