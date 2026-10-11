@@ -137,6 +137,7 @@ let currentTab = 'places'; // 'places' veya 'route'
 document.addEventListener("DOMContentLoaded", () => {
   initIcons();
   initTheme();
+  initGooglePlacesApi();
   loadPlaces();
   initMap();
   setupEventListeners();
@@ -175,25 +176,46 @@ const THEMES = {
   }
 };
 
+window.toggleThemeDropdown = function(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  const dropdown = document.getElementById("themeDropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+  }
+};
+
+window.toggleDarkMode = function(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  const current = localStorage.getItem("gezi_theme") || "emerald";
+  if (current === "dark") {
+    window.setAppTheme("emerald");
+  } else {
+    window.setAppTheme("dark");
+  }
+};
+
 function initTheme() {
   const savedTheme = localStorage.getItem("gezi_theme") || "emerald";
-  setAppTheme(savedTheme, false);
+  window.setAppTheme(savedTheme, false);
 
-  const toggleBtn = document.getElementById("themeToggleBtn");
-  const dropdown = document.getElementById("themeDropdown");
-
-  if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      dropdown.classList.toggle("hidden");
-    });
-
-    document.addEventListener("click", (e) => {
-      if (!toggleBtn.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add("hidden");
+  // Dışarı tıklandığında tema menüsünü kapat
+  document.addEventListener("click", (e) => {
+    const toggleBtn = document.getElementById("themeToggleBtn");
+    const dropdown = document.getElementById("themeDropdown");
+    if (dropdown && !dropdown.classList.contains("hidden")) {
+      if (toggleBtn && (toggleBtn === e.target || toggleBtn.contains(e.target))) {
+        return;
       }
-    });
-  }
+      if (dropdown.contains(e.target)) {
+        return;
+      }
+      dropdown.classList.add("hidden");
+    }
+  });
 }
 
 window.setAppTheme = function(themeName, notify = true) {
@@ -213,15 +235,21 @@ window.setAppTheme = function(themeName, notify = true) {
   const nameDisplay = document.getElementById("themeNameDisplay");
   if (nameDisplay) nameDisplay.innerText = theme.shortName;
 
-  const iconEl = document.getElementById("themeIcon");
-  if (iconEl) {
-    iconEl.setAttribute('data-lucide', theme.icon);
-    if (themeName === 'emerald') {
-      iconEl.className = "w-4 h-4 text-emerald-500";
-    } else if (themeName === 'ocean') {
-      iconEl.className = "w-4 h-4 text-sky-500";
+  // İkonları Lucide SVG uyumlu güvenli güncelle
+  const iconContainer = document.getElementById("themeIconContainer");
+  if (iconContainer) {
+    let iconColor = "text-emerald-500";
+    if (themeName === 'ocean') iconColor = "text-sky-500";
+    else if (themeName === 'dark') iconColor = "text-amber-400";
+    iconContainer.innerHTML = `<i data-lucide="${theme.icon}" class="w-4 h-4 ${iconColor}"></i>`;
+  }
+
+  const darkIconContainer = document.getElementById("quickDarkIconContainer");
+  if (darkIconContainer) {
+    if (themeName === 'dark') {
+      darkIconContainer.innerHTML = `<i data-lucide="sun" class="w-4 h-4 text-amber-400"></i>`;
     } else {
-      iconEl.className = "w-4 h-4 text-amber-400";
+      darkIconContainer.innerHTML = `<i data-lucide="moon" class="w-4 h-4 text-slate-700"></i>`;
     }
   }
 
@@ -1333,15 +1361,167 @@ function escapeHtml(str) {
 }
 
 // -------------------------------------------------------------
-// GOOGLE MAPS TARZI CANLI MEKAN ARAMA & LİNK SİSTEMİ
+// GOOGLE MAPS API, CANLI ARAMA & HARİTADAN KONUM SEÇME MOTORU
 // -------------------------------------------------------------
 let searchDebounceTimeout = null;
 
+// Google Maps API Başlatıcı & Durum Kontrolü
+function initGooglePlacesApi() {
+  const key = localStorage.getItem("google_maps_api_key");
+  if (key) {
+    loadGooglePlacesScript(key);
+  } else {
+    updateGoogleApiStatusBadge(false);
+  }
+}
+
+function updateGoogleApiStatusBadge(isActive) {
+  const text = document.getElementById("googleApiStatusText");
+  const badge = document.getElementById("googleApiStatusBadge");
+  if (text && badge) {
+    if (isActive) {
+      text.innerText = "Google API 🟢";
+      badge.className = "text-[10px] theme-bg-card font-extrabold px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-600 shadow-xs flex items-center gap-1 cursor-pointer";
+    } else {
+      text.innerText = "Google API";
+      badge.className = "text-[10px] theme-bg-card font-bold px-2 py-0.5 rounded-full border theme-border hover:border-emerald-500 transition shadow-xs flex items-center gap-1 text-slate-700 dark:text-slate-300 cursor-pointer";
+    }
+  }
+}
+
+function loadGooglePlacesScript(key) {
+  if (window.google && window.google.maps && window.google.maps.places) {
+    updateGoogleApiStatusBadge(true);
+    return;
+  }
+  const existing = document.getElementById("googlePlacesScript");
+  if (existing) existing.remove();
+
+  const script = document.createElement("script");
+  script.id = "googlePlacesScript";
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=tr&region=TR`;
+  script.async = true;
+  script.defer = true;
+  script.onload = () => {
+    updateGoogleApiStatusBadge(true);
+    showToast("Google Maps Places API aktif edildi! 🚀");
+  };
+  script.onerror = () => {
+    updateGoogleApiStatusBadge(false);
+    console.warn("Google Maps API anahtarı yüklenemedi.");
+  };
+  document.head.appendChild(script);
+}
+
+// Google API Modal Fonksiyonları
+window.openGoogleApiModal = function() {
+  const modal = document.getElementById("googleApiModal");
+  const input = document.getElementById("googleApiKeyInput");
+  const removeBtn = document.getElementById("removeGoogleApiKeyBtn");
+  const key = localStorage.getItem("google_maps_api_key") || "";
+
+  if (input) input.value = key;
+  if (removeBtn) {
+    if (key) removeBtn.classList.remove("hidden");
+    else removeBtn.classList.add("hidden");
+  }
+  if (modal) modal.classList.remove("hidden");
+};
+
+window.closeGoogleApiModal = function() {
+  const modal = document.getElementById("googleApiModal");
+  if (modal) modal.classList.add("hidden");
+};
+
+window.saveGoogleApiKey = function() {
+  const input = document.getElementById("googleApiKeyInput");
+  const key = (input ? input.value : "").trim();
+  if (key) {
+    localStorage.setItem("google_maps_api_key", key);
+    loadGooglePlacesScript(key);
+    updateGoogleApiStatusBadge(true);
+    showToast("Google Maps API kaydedildi! Canlı arama hazır. 🚀");
+  } else {
+    localStorage.removeItem("google_maps_api_key");
+    updateGoogleApiStatusBadge(false);
+    showToast("API anahtarı temizlendi.");
+  }
+  window.closeGoogleApiModal();
+};
+
+window.removeGoogleApiKey = function() {
+  localStorage.removeItem("google_maps_api_key");
+  const input = document.getElementById("googleApiKeyInput");
+  if (input) input.value = "";
+  updateGoogleApiStatusBadge(false);
+  window.closeGoogleApiModal();
+  showToast("Google API anahtarı kaldırıldı.");
+};
+
+// Haritadan Tıkla & Konum Seç
+window.startPickOnMap = function() {
+  const modal = document.getElementById("placeModal");
+  if (modal) modal.classList.add("hidden");
+
+  const dropdown = document.getElementById("searchResultsDropdown");
+  if (dropdown) dropdown.classList.add("hidden");
+
+  const banner = document.getElementById("mapPickBanner");
+  if (banner) banner.classList.remove("hidden");
+
+  switchTab('map');
+
+  if (!map) return;
+
+  const onMapClick = (e) => {
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+
+    // En yakın semti bul
+    let closest = "Kadıköy";
+    let minDist = Infinity;
+    for (const [distName, coords] of Object.entries(DISTRICT_COORDS)) {
+      const d = Math.hypot(coords[0] - lat, coords[1] - lng);
+      if (d < minDist) {
+        minDist = d;
+        closest = distName;
+      }
+    }
+
+    document.getElementById("modalPlaceLat").value = lat.toFixed(5);
+    document.getElementById("modalPlaceLng").value = lng.toFixed(5);
+    document.getElementById("modalPlaceDistrict").value = closest;
+
+    if (banner) banner.classList.add("hidden");
+    if (modal) modal.classList.remove("hidden");
+
+    showToast(`Konum haritadan seçildi: ${closest} 📍`);
+  };
+
+  map.once('click', onMapClick);
+  window._currentMapPickHandler = onMapClick;
+};
+
+window.cancelPickOnMap = function() {
+  const banner = document.getElementById("mapPickBanner");
+  if (banner) banner.classList.add("hidden");
+
+  const modal = document.getElementById("placeModal");
+  if (modal) modal.classList.remove("hidden");
+
+  if (map && window._currentMapPickHandler) {
+    map.off('click', window._currentMapPickHandler);
+    window._currentMapPickHandler = null;
+  }
+};
+
+// Canlı Arama Input ve Etkileşim
 function setupQuickSearch() {
   const quickInput = document.getElementById("quickSearchInput");
   const dropdown = document.getElementById("searchResultsDropdown");
   const spinner = document.getElementById("searchSpinner");
   const clearBtn = document.getElementById("clearSearchBtn");
+  const directLink = document.getElementById("directGoogleSearchLink");
 
   if (!quickInput) return;
 
@@ -1352,6 +1532,7 @@ function setupQuickSearch() {
       clearBtn.classList.add("hidden");
       dropdown.classList.add("hidden");
       dropdown.innerHTML = "";
+      if (directLink) directLink.href = "https://maps.google.com";
       quickInput.focus();
     });
   }
@@ -1365,19 +1546,24 @@ function setupQuickSearch() {
       else clearBtn.classList.add("hidden");
     }
 
+    if (directLink) {
+      directLink.href = val.length > 0
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(val + ' İstanbul')}`
+        : "https://maps.google.com";
+    }
+
     if (!val) {
       dropdown.classList.add("hidden");
       dropdown.innerHTML = "";
       return;
     }
 
-    // 1. Google Maps linki mi?
-    if (val.includes("google.com/maps") || val.includes("maps.app.goo.gl") || val.includes("goo.gl/maps")) {
+    // Google Maps linki veya kopyalanmış adres mi?
+    if (val.includes("google.com/maps") || val.includes("maps.app.goo.gl") || val.includes("goo.gl/maps") || (val.includes("·") && val.includes("★"))) {
       handleGoogleMapsLink(val);
       return;
     }
 
-    // 2. Normal mekan adı araması
     clearTimeout(searchDebounceTimeout);
     if (val.length < 2) {
       dropdown.classList.add("hidden");
@@ -1387,7 +1573,7 @@ function setupQuickSearch() {
     spinner.classList.remove("hidden");
     searchDebounceTimeout = setTimeout(() => {
       fetchPlaceSuggestions(val);
-    }, 300);
+    }, 250);
   });
 
   // Dışarı tıklandığında dropdown kapat
@@ -1398,35 +1584,43 @@ function setupQuickSearch() {
   });
 }
 
-// Google Maps URL çözümleyici
-function handleGoogleMapsLink(url) {
+// Google Maps URL ve Kopyalanmış Metin Çözücü
+function handleGoogleMapsLink(inputStr) {
   const spinner = document.getElementById("searchSpinner");
-  spinner.classList.remove("hidden");
+  if (spinner) spinner.classList.remove("hidden");
 
   try {
     let placeName = "";
     let lat = null;
     let lng = null;
 
-    // Örn: https://www.google.com/maps/place/Basta!+Street+Food+Bar/@40.9860,29.0260,17z/...
-    const placeMatch = url.match(/\/place\/([^\/@?]+)/);
+    // 1. Standart URL formatı: /place/Mekan+Adı/@40.98,29.02
+    const placeMatch = inputStr.match(/\/place\/([^\/@?]+)/);
     if (placeMatch && placeMatch[1]) {
       placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
     }
 
     // Koordinat bulma: @40.9860,29.0260 veya ?q=40.9860,29.0260
-    const coordMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    const coordMatch = inputStr.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || inputStr.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (coordMatch) {
       lat = parseFloat(coordMatch[1]);
       lng = parseFloat(coordMatch[2]);
     }
 
+    // 2. Kopyalanmış metin formatı (Google Maps uygulamasından kopyalanan mekan kartı)
+    if (!placeName && !inputStr.startsWith("http")) {
+      const lines = inputStr.split("\n").map(l => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        placeName = lines[0];
+      }
+    }
+
     if (placeName) {
       document.getElementById("modalPlaceName").value = placeName;
       autoDetectCategoryAndDistrict(placeName, lat, lng);
-      showToast(`"${placeName}" linkten başarıyla okundu! ✨`);
+      showToast(`"${placeName}" Google Maps'ten okundu! ✨`);
     } else {
-      showToast("Link tespit edildi, koordinat ve detaylar aktarılıyor...", "info");
+      showToast("Link tespit edildi, detaylar form alanına aktarılıyor...", "info");
     }
 
     if (lat && lng) {
@@ -1436,119 +1630,209 @@ function handleGoogleMapsLink(url) {
   } catch (err) {
     console.error("Link parsing error:", err);
   } finally {
-    spinner.classList.add("hidden");
+    if (spinner) spinner.classList.add("hidden");
   }
 }
 
-// Google Maps Tarzı Canlı Arama Motoru (Photon + Nominatim Hibrit)
-// Google Maps Tarzı Canlı Arama Motoru (İstanbul Odaklı BBOX + Nominatim)
+// Doğrudan aranan ismi forma aktar
+window.applyDirectPlaceName = function(name) {
+  document.getElementById("modalPlaceName").value = name;
+  autoDetectCategoryAndDistrict(name);
+  const dropdown = document.getElementById("searchResultsDropdown");
+  if (dropdown) dropdown.classList.add("hidden");
+  showToast(`"${name}" mekan adı olarak aktarıldı! ✨`);
+  const distInput = document.getElementById("modalPlaceDistrict");
+  if (distInput) distInput.focus();
+};
+
+// Google Maps Tarzı Canlı Arama Motoru (Hibrit: Google Places API + Photon POI + Akıllı Kartlar)
 async function fetchPlaceSuggestions(query) {
   const dropdown = document.getElementById("searchResultsDropdown");
   const spinner = document.getElementById("searchSpinner");
 
   let results = [];
 
-  try {
-    // 1. Photon API - Kesin İstanbul Koordinat Sınırları (bbox: 28.0, 40.7, 29.9, 41.6)
-    // Bu sayede İngiltere, Kıbrıs veya Yunanistan asla gelmez, SADECE İstanbul mekanları listelenir!
-    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=28.0,40.7,29.9,41.6&limit=10`;
-    const res = await fetch(photonUrl);
-    const data = await res.json();
-
-    if (data && data.features && data.features.length > 0) {
-      results = data.features.map(f => {
-        const p = f.properties || {};
-        const coords = f.geometry && f.geometry.coordinates ? f.geometry.coordinates : [28.9784, 41.0082];
-        const name = p.name || query;
-        const district = p.district || p.locality || p.city || p.suburb || p.county || "İstanbul";
-        const street = p.street ? `${p.street}` : "";
-        const category = p.osm_value || p.osm_key || "";
-        return {
-          name: name,
-          district: district,
-          subtitle: [street, district, "İstanbul"].filter(Boolean).join(", "),
-          category: category,
-          lat: coords[1],
-          lng: coords[0]
-        };
+  // A. Eğer Google Places API aktifse resmi Google veritabanından çek!
+  if (window.google && window.google.maps && window.google.maps.places) {
+    try {
+      const service = new google.maps.places.AutocompleteService();
+      const predictions = await new Promise((resolve) => {
+        service.getPlacePredictions({
+          input: query,
+          componentRestrictions: { country: 'tr' },
+          locationBias: {
+            north: 41.6,
+            south: 40.7,
+            east: 29.9,
+            west: 28.0
+          }
+        }, (res, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && res) {
+            resolve(res);
+          } else {
+            resolve([]);
+          }
+        });
       });
+
+      if (predictions && predictions.length > 0) {
+        results = predictions.map(p => ({
+          name: p.structured_formatting ? p.structured_formatting.main_text : p.description.split(",")[0],
+          district: p.structured_formatting ? p.structured_formatting.secondary_text : p.description,
+          subtitle: p.description,
+          category: "Google Maps Mekanı",
+          placeId: p.place_id,
+          isGoogle: true
+        }));
+      }
+    } catch (e) {
+      console.warn("Google Places prediction error:", e);
     }
-  } catch (err) {
-    console.warn("Photon search fallback:", err);
   }
 
-  // Eğer Photon ile az sonuç geldiyse Nominatim İstanbul ile destekle
+  // B. Photon İstanbul API (POIs odaklı filtreleme)
   if (results.length === 0) {
     try {
-      const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' İstanbul')}&format=json&addressdetails=1&countrycodes=tr&viewbox=28.0,41.5,29.9,40.7&bounded=1&limit=6&accept-language=tr`;
-      const nomRes = await fetch(nomUrl);
-      const nomData = await nomRes.json();
-      if (nomData && nomData.length > 0) {
-        results = nomData.map(item => {
-          const addr = item.address || {};
-          const district = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.county || "İstanbul";
-          const mainName = item.name || item.display_name.split(",")[0];
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=28.0,40.7,29.9,41.6&limit=12`;
+      const res = await fetch(photonUrl);
+      const data = await res.json();
+
+      if (data && data.features && data.features.length > 0) {
+        // Alakasız konut sokaklarını filtrele (kullanıcı cadde/sokak yazmadıysa)
+        const isStreetQuery = query.toLowerCase().includes("cad") || query.toLowerCase().includes("sok");
+        
+        const filteredFeatures = data.features.filter(f => {
+          const val = f.properties && (f.properties.osm_value || f.properties.osm_key || "");
+          if (!isStreetQuery && (val === "residential" || val === "tertiary" || val === "service")) {
+            return false;
+          }
+          return true;
+        });
+
+        const targetFeatures = filteredFeatures.length > 0 ? filteredFeatures : data.features.slice(0, 5);
+
+        results = targetFeatures.map(f => {
+          const p = f.properties || {};
+          const coords = f.geometry && f.geometry.coordinates ? f.geometry.coordinates : [28.9784, 41.0082];
+          const name = p.name || query;
+          const district = p.district || p.locality || p.city || p.suburb || p.county || "İstanbul";
+          const street = p.street ? `${p.street}` : "";
+          const category = p.osm_value || p.osm_key || "";
           return {
-            name: mainName,
+            name: name,
             district: district,
-            subtitle: item.display_name.split(",").slice(1, 3).join(",").trim(),
-            category: item.type || item.category || "",
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon)
+            subtitle: [street, district, "İstanbul"].filter(Boolean).join(", "),
+            category: category,
+            lat: coords[1],
+            lng: coords[0]
           };
         });
       }
-    } catch (e) {
-      console.error("Nominatim search error:", e);
+    } catch (err) {
+      console.warn("Photon search fallback:", err);
     }
   }
 
-  spinner.classList.add("hidden");
+  if (spinner) spinner.classList.add("hidden");
 
-  if (results.length === 0) {
-    dropdown.innerHTML = `
-      <div class="p-3 text-center">
-        <p class="text-xs font-semibold text-slate-700">İstanbul'da mekan bulunamadı</p>
-        <p class="text-[11px] text-slate-400 mt-0.5">"${escapeHtml(query)}" adını doğrudan form alanına yazabilirsiniz.</p>
-      </div>`;
-    dropdown.classList.remove("hidden");
-    return;
+  dropdown.innerHTML = "";
+
+  // -------------------------------------------------------------------
+  // HER ARAMADA EN ÜSTTE 3 AKILLI GOOGLE MAPS AKSİYON KARTI
+  // -------------------------------------------------------------------
+  const topActions = document.createElement("div");
+  topActions.className = "p-2 bg-emerald-500/10 border-b theme-border space-y-1";
+
+  // 1. Doğrudan bu isimle forma aktar
+  const directBtn = document.createElement("button");
+  directBtn.type = "button";
+  directBtn.className = "w-full text-left p-2 rounded-xl theme-bg-card hover:bg-emerald-50 dark:hover:bg-slate-700/80 transition flex items-center justify-between border theme-border group";
+  directBtn.innerHTML = `
+    <div class="flex items-center gap-2 overflow-hidden">
+      <span class="p-1 rounded-lg bg-emerald-100 text-emerald-700 text-xs shrink-0">✨</span>
+      <div class="truncate">
+        <span class="text-xs font-extrabold theme-text-main group-hover:text-emerald-600 block truncate">"${escapeHtml(query)}" olarak kullan</span>
+        <span class="text-[10px] theme-text-muted block">Mekan adını forma tek tıkla aktar</span>
+      </div>
+    </div>
+    <span class="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-md shrink-0">Formu Doldur</span>
+  `;
+  directBtn.addEventListener("click", () => window.applyDirectPlaceName(query));
+  topActions.appendChild(directBtn);
+
+  // 2. Google Maps'te Aç
+  const gmapsLink = document.createElement("a");
+  gmapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query + ' İstanbul')}`;
+  gmapsLink.target = "_blank";
+  gmapsLink.rel = "noopener noreferrer";
+  gmapsLink.className = "w-full text-left p-2 rounded-xl theme-bg-card hover:bg-sky-50 dark:hover:bg-slate-700/80 transition flex items-center justify-between border theme-border group block";
+  gmapsLink.innerHTML = `
+    <div class="flex items-center gap-2 overflow-hidden">
+      <span class="p-1 rounded-lg bg-sky-100 text-sky-700 text-xs shrink-0">🗺️</span>
+      <div class="truncate">
+        <span class="text-xs font-bold theme-text-main group-hover:text-sky-600 block truncate">Google Haritalar'da "${escapeHtml(query)}" Aç</span>
+        <span class="text-[10px] theme-text-muted block">Google Maps uygulamasında veya webde gör ↗</span>
+      </div>
+    </div>
+    <span class="text-[10px] font-bold text-sky-600 bg-sky-500/10 px-2 py-0.5 rounded-md shrink-0">Maps'te Bul</span>
+  `;
+  topActions.appendChild(gmapsLink);
+
+  dropdown.appendChild(topActions);
+
+  // B. Bulunan Mekan Sonuçları
+  if (results.length > 0) {
+    const listHeader = document.createElement("div");
+    listHeader.className = "px-3 py-1.5 text-[10px] font-extrabold theme-text-muted uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50";
+    listHeader.innerText = "Önerilen Mekanlar";
+    dropdown.appendChild(listHeader);
+
+    results.forEach(item => {
+      const row = document.createElement("div");
+      row.className = "p-2.5 hover:bg-emerald-50/60 dark:hover:bg-slate-700/60 cursor-pointer transition flex items-center justify-between text-left group";
+      
+      let icon = "🍽️";
+      const catLower = (item.category + " " + item.name).toLowerCase();
+      if (catLower.includes("cafe") || catLower.includes("kahve") || catLower.includes("coffee")) icon = "☕";
+      else if (catLower.includes("tatlı") || catLower.includes("baklava") || catLower.includes("fırın")) icon = "🍰";
+      else if (catLower.includes("bar") || catLower.includes("pub") || catLower.includes("meyhane")) icon = "🍸";
+      else if (catLower.includes("kebap") || catLower.includes("döner") || catLower.includes("dürüm") || catLower.includes("burger")) icon = "🥩";
+      else if (catLower.includes("kule") || catLower.includes("cami") || catLower.includes("müze") || catLower.includes("saray") || catLower.includes("park") || catLower.includes("sahil")) icon = "🏛️";
+
+      row.innerHTML = `
+        <div class="flex items-start gap-2.5 overflow-hidden">
+          <span class="text-sm p-1.5 rounded-xl theme-bg-surface shrink-0">${icon}</span>
+          <div class="overflow-hidden">
+            <div class="text-xs font-bold theme-text-main group-hover:text-emerald-600 transition truncate">${escapeHtml(item.name)}</div>
+            <div class="text-[10px] theme-text-muted truncate mt-0.5">${escapeHtml(item.subtitle)}</div>
+          </div>
+        </div>
+        <button type="button" class="text-xs bg-emerald-500/10 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white px-2 py-1 rounded-lg font-bold transition shrink-0 ml-2">
+          Seç
+        </button>
+      `;
+
+      row.addEventListener("click", () => {
+        applySelectedPlace(item);
+        dropdown.classList.add("hidden");
+      });
+
+      dropdown.appendChild(row);
+    });
   }
 
-  // Google Maps stili zengin liste görünümü
-  dropdown.innerHTML = "";
-  results.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "p-3 hover:bg-rose-50/70 cursor-pointer transition flex items-center justify-between text-left group";
-    
-    // Kategoriye uygun ikon seçimi
-    let icon = "🍽️";
-    const catLower = (item.category + " " + item.name).toLowerCase();
-    if (catLower.includes("cafe") || catLower.includes("kahve") || catLower.includes("coffee")) icon = "☕";
-    else if (catLower.includes("tatlı") || catLower.includes("baklava") || catLower.includes("fırın")) icon = "🍰";
-    else if (catLower.includes("bar") || catLower.includes("pub")) icon = "🍸";
-    else if (catLower.includes("kebap") || catLower.includes("döner") || catLower.includes("dürüm")) icon = "🥩";
-
-    row.innerHTML = `
-      <div class="flex items-start gap-2.5 overflow-hidden">
-        <span class="text-base p-1.5 bg-slate-100 rounded-lg group-hover:bg-white transition shrink-0">${icon}</span>
-        <div class="overflow-hidden">
-          <div class="text-xs font-bold text-slate-900 group-hover:text-rose-600 transition truncate">${escapeHtml(item.name)}</div>
-          <div class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(item.subtitle)}</div>
-        </div>
-      </div>
-      <button type="button" class="text-xs bg-rose-50 text-rose-600 group-hover:bg-rose-500 group-hover:text-white px-2.5 py-1 rounded-lg font-semibold transition shrink-0 ml-2">
-        Seç
-      </button>
-    `;
-
-    row.addEventListener("click", () => {
-      applySelectedPlace(item);
-      dropdown.classList.add("hidden");
-    });
-
-    dropdown.appendChild(row);
-  });
+  // C. Alt Kısım: Haritadan Seç & API Ayarı Butonu
+  const bottomBar = document.createElement("div");
+  bottomBar.className = "p-2 bg-slate-50 dark:bg-slate-800/80 border-t theme-border flex items-center justify-between text-[11px]";
+  bottomBar.innerHTML = `
+    <button type="button" onclick="window.startPickOnMap()" class="font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
+      <span>📍 Haritada Yere Tıkla & Seç</span>
+    </button>
+    <button type="button" onclick="window.openGoogleApiModal()" class="text-slate-500 hover:theme-text-main font-semibold flex items-center gap-1">
+      <span>⚙️ Google API</span>
+    </button>
+  `;
+  dropdown.appendChild(bottomBar);
 
   dropdown.classList.remove("hidden");
 }
@@ -1560,43 +1844,20 @@ function applySelectedPlace(info) {
   if (info.lat && info.lng) {
     document.getElementById("modalPlaceLat").value = Number(info.lat).toFixed(5);
     document.getElementById("modalPlaceLng").value = Number(info.lng).toFixed(5);
-  }
-
-  // İlçe tahmini (İstanbul ilçe listesinden eşleştir)
-  let detectedDistrict = "Kadıköy";
-  const haystack = (info.district + " " + info.subtitle).toLowerCase();
-  for (const known of Object.keys(DISTRICT_COORDS)) {
-    if (haystack.includes(known.toLowerCase())) {
-      detectedDistrict = known;
-      break;
-    }
-  }
-  document.getElementById("modalPlaceDistrict").value = detectedDistrict;
-
-  // Kategori tahmini
-  const nameLower = (info.name + " " + (info.category || "")).toLowerCase();
-  
-  if (nameLower.includes("cafe") || nameLower.includes("kahve") || nameLower.includes("coffee") || nameLower.includes("çay")) {
-    document.getElementById("modalPlaceCategory").value = "Cafe";
-  } else if (nameLower.includes("tatlı") || nameLower.includes("çikolata") || nameLower.includes("baklava") || nameLower.includes("pasta") || nameLower.includes("fırın") || nameLower.includes("muhallebi")) {
-    document.getElementById("modalPlaceCategory").value = "Tatlı";
-  } else if (nameLower.includes("dürüm") || nameLower.includes("burger") || nameLower.includes("döner") || nameLower.includes("kokoreç") || nameLower.includes("midye") || nameLower.includes("sokak")) {
-    document.getElementById("modalPlaceCategory").value = "Sokak Lezzeti";
-  } else if (nameLower.includes("bar") || nameLower.includes("pub") || nameLower.includes("meyhane") || nameLower.includes("bira")) {
-    document.getElementById("modalPlaceCategory").value = "Meyhane / Bar";
+    autoDetectCategoryAndDistrict(info.name, info.lat, info.lng);
   } else {
-    document.getElementById("modalPlaceCategory").value = "Yemek";
+    autoDetectCategoryAndDistrict(info.name);
   }
 
   document.getElementById("quickSearchInput").value = info.name;
   const clearBtn = document.getElementById("clearSearchBtn");
   if (clearBtn) clearBtn.classList.remove("hidden");
 
-  showToast(`"${info.name}" bilgileri ve konumu aktarıldı! ✅`);
+  showToast(`"${info.name}" forma aktarıldı! ✅`);
 }
 
 function autoDetectCategoryAndDistrict(name, lat, lng) {
-  // Koordinat ile en yakın bilinen semti bul
+  // 1. Koordinat ile en yakın bilinen semti bul
   if (lat && lng) {
     let closest = "Kadıköy";
     let minDist = Infinity;
@@ -1608,17 +1869,31 @@ function autoDetectCategoryAndDistrict(name, lat, lng) {
       }
     }
     document.getElementById("modalPlaceDistrict").value = closest;
+  } else {
+    // İsim içinde ilçe geçiyor mu kontrol et
+    const nameLower = name.toLowerCase();
+    for (const dist of Object.keys(DISTRICT_COORDS)) {
+      if (nameLower.includes(dist.toLowerCase())) {
+        document.getElementById("modalPlaceDistrict").value = dist;
+        break;
+      }
+    }
   }
 
+  // 2. Kategori tahmini
   const nameLower = name.toLowerCase();
-  if (nameLower.includes("cafe") || nameLower.includes("kahve") || nameLower.includes("coffee")) {
+  if (nameLower.includes("kule") || nameLower.includes("cami") || nameLower.includes("saray") || nameLower.includes("müze") || nameLower.includes("sahil") || nameLower.includes("park") || nameLower.includes("meydan") || nameLower.includes("ada") || nameLower.includes("iskele") || nameLower.includes("hisar") || nameLower.includes("tarihi") || nameLower.includes("manzara")) {
+    document.getElementById("modalPlaceCategory").value = "Gezilecek Yer";
+  } else if (nameLower.includes("cafe") || nameLower.includes("kahve") || nameLower.includes("coffee") || nameLower.includes("espresso") || nameLower.includes("çay")) {
     document.getElementById("modalPlaceCategory").value = "Cafe";
-  } else if (nameLower.includes("tatlı") || nameLower.includes("çikolata") || nameLower.includes("baklava") || nameLower.includes("pastane")) {
+  } else if (nameLower.includes("tatlı") || nameLower.includes("çikolata") || nameLower.includes("baklava") || nameLower.includes("pasta") || nameLower.includes("pastane") || nameLower.includes("fırın") || nameLower.includes("muhallebi")) {
     document.getElementById("modalPlaceCategory").value = "Tatlı";
-  } else if (nameLower.includes("dürüm") || nameLower.includes("burger") || nameLower.includes("döner")) {
+  } else if (nameLower.includes("dürüm") || nameLower.includes("burger") || nameLower.includes("döner") || nameLower.includes("kokoreç") || nameLower.includes("midye") || nameLower.includes("sokak") || nameLower.includes("lahmacun") || nameLower.includes("pide")) {
     document.getElementById("modalPlaceCategory").value = "Sokak Lezzeti";
-  } else if (nameLower.includes("bar") || nameLower.includes("pub") || nameLower.includes("meyhane")) {
+  } else if (nameLower.includes("bar") || nameLower.includes("pub") || nameLower.includes("meyhane") || nameLower.includes("bira") || nameLower.includes("şarap")) {
     document.getElementById("modalPlaceCategory").value = "Meyhane / Bar";
+  } else {
+    document.getElementById("modalPlaceCategory").value = "Yemek";
   }
 }
 
