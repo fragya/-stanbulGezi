@@ -674,17 +674,22 @@ function switchTab(tab) {
 
   // Alt Bar Butonları
   const bNavPlaces = document.getElementById("bottomNavPlaces");
+  const bNavMap = document.getElementById("bottomNavMap");
   const bNavRoute = document.getElementById("bottomNavRoute");
 
-  const resetMobileSegmentClasses = () => {
+  const isMobile = window.innerWidth < 1024;
+
+  const resetStyles = () => {
     if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
     if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
     if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
+    
     if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
+    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
     if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
   };
 
-  resetMobileSegmentClasses();
+  resetStyles();
 
   if (tab === 'places') {
     if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
@@ -693,10 +698,9 @@ function switchTab(tab) {
     viewPlaces.classList.remove("hidden");
     viewRoute.classList.add("hidden");
 
-    // Mobilde sol kolonu göster, haritayı mobilde gizle (desktopta hep açık)
     if (leftCol) leftCol.classList.remove("hidden");
     if (rightCol) {
-      if (window.innerWidth < 1024) rightCol.classList.add("hidden");
+      if (isMobile) rightCol.classList.add("hidden");
       else rightCol.classList.remove("hidden");
     }
 
@@ -710,15 +714,27 @@ function switchTab(tab) {
     updateMapMarkers(getFilteredPlaces());
     document.getElementById("activeMapFilterNote").innerText = "Tüm Mekanlar";
   } else if (tab === 'map') {
-    // Sadece mobilde tam ekran harita görünümü
-    if (leftCol && window.innerWidth < 1024) leftCol.classList.add("hidden");
-    if (rightCol) rightCol.classList.remove("hidden");
+    // Sadece mobilde tam ekran harita
+    if (leftCol && isMobile) leftCol.classList.add("hidden");
+    if (rightCol) {
+      rightCol.classList.remove("hidden");
+      rightCol.classList.remove("lg:flex"); // zorla göster
+      rightCol.classList.add("flex");
+    }
 
     if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-blue-600 bg-white shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-blue-500 font-bold text-[10px]";
 
     setTimeout(() => {
-      if (map) map.invalidateSize();
-    }, 150);
+      if (map) {
+        map.invalidateSize();
+        const filtered = getFilteredPlaces();
+        if (filtered.length > 0) {
+          const latlngs = filtered.filter(p => p.lat && p.lng).map(p => [p.lat, p.lng]);
+          if (latlngs.length > 0) map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] });
+        }
+      }
+    }, 200);
   } else if (tab === 'route') {
     if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
     if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
@@ -728,13 +744,14 @@ function switchTab(tab) {
 
     if (leftCol) leftCol.classList.remove("hidden");
     if (rightCol) {
-      if (window.innerWidth < 1024) rightCol.classList.add("hidden");
+      if (isMobile) rightCol.classList.add("hidden");
       else rightCol.classList.remove("hidden");
     }
 
     if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-amber-700 bg-white shadow-sm flex items-center justify-center gap-1.5";
     if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-amber-500 font-bold text-[10px]";
   }
+  initIcons();
 }
 
 // Event Listeners
@@ -756,9 +773,11 @@ function setupEventListeners() {
   // Mobil Alt Bar Butonları
   const bNavPlaces = document.getElementById("bottomNavPlaces");
   if (bNavPlaces) bNavPlaces.addEventListener("click", () => switchTab('places'));
+  const bNavMap = document.getElementById("bottomNavMap");
+  if (bNavMap) bNavMap.addEventListener("click", () => switchTab('map'));
   const bNavAdd = document.getElementById("bottomNavAdd");
   if (bNavAdd) bNavAdd.addEventListener("click", () => {
-    document.getElementById("openNewPlaceModal").click();
+    openNewPlaceModalDirect();
   });
   const bNavRoute = document.getElementById("bottomNavRoute");
   if (bNavRoute) bNavRoute.addEventListener("click", () => switchTab('route'));
@@ -794,21 +813,8 @@ function setupEventListeners() {
   });
 
   // Modal Aç/Kapa
-  document.getElementById("openNewPlaceModal").addEventListener("click", () => {
-    document.getElementById("placeForm").reset();
-    document.getElementById("placeId").value = "";
-    document.getElementById("modalTitle").innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-rose-500"></i><span>Yeni Mekan Ekle</span>`;
-    document.getElementById("ratingDisplayValue").innerText = "9.0";
-    document.getElementById("modalPlaceScore").value = "9";
-    
-    // Hızlı arama temizle
-    const quickInput = document.getElementById("quickSearchInput");
-    if (quickInput) quickInput.value = "";
-    const dropdown = document.getElementById("searchResultsDropdown");
-    if (dropdown) dropdown.classList.add("hidden");
-
-    openModal();
-  });
+  const openPlaceBtn = document.getElementById("openNewPlaceModal");
+  if (openPlaceBtn) openPlaceBtn.addEventListener("click", openNewPlaceModalDirect);
 
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
   document.getElementById("cancelModalBtn").addEventListener("click", closeModal);
@@ -837,6 +843,31 @@ function setupEventListeners() {
 
   // Rotayı kopyala
   document.getElementById("copyRouteBtn").addEventListener("click", copyRouteToClipboard);
+}
+
+function openNewPlaceModalDirect() {
+  const form = document.getElementById("placeForm");
+  if (form) form.reset();
+  
+  const idInput = document.getElementById("placeId");
+  if (idInput) idInput.value = "";
+  
+  const title = document.getElementById("modalTitle");
+  if (title) title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-rose-500"></i><span>Yeni Mekan Ekle</span>`;
+  
+  const displayVal = document.getElementById("ratingDisplayValue");
+  if (displayVal) displayVal.innerText = "9.0";
+  
+  const scoreInput = document.getElementById("modalPlaceScore");
+  if (scoreInput) scoreInput.value = "9";
+  
+  const quickInput = document.getElementById("quickSearchInput");
+  if (quickInput) quickInput.value = "";
+  
+  const dropdown = document.getElementById("searchResultsDropdown");
+  if (dropdown) dropdown.classList.add("hidden");
+
+  openModal();
 }
 
 function openModal() {
