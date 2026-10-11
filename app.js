@@ -136,6 +136,7 @@ let currentTab = 'places'; // 'places' veya 'route'
 // Başlatma
 document.addEventListener("DOMContentLoaded", () => {
   initIcons();
+  initTheme();
   loadPlaces();
   initMap();
   setupEventListeners();
@@ -149,6 +150,95 @@ function initIcons() {
     lucide.createIcons();
   }
 }
+
+// -------------------------------------------------------------
+// TEMA YÖNETİMİ (Zümrüt Yeşil & Mavi, Okyanus & Nane, Gece Modu)
+// -------------------------------------------------------------
+const THEMES = {
+  emerald: {
+    name: 'Zümrüt & Mavi',
+    shortName: 'Zümrüt',
+    color: '#059669',
+    icon: 'palette'
+  },
+  ocean: {
+    name: 'Okyanus & Nane',
+    shortName: 'Okyanus',
+    color: '#0284c7',
+    icon: 'waves'
+  },
+  dark: {
+    name: 'Gece Modu',
+    shortName: 'Gece',
+    color: '#0f172a',
+    icon: 'moon'
+  }
+};
+
+function initTheme() {
+  const savedTheme = localStorage.getItem("gezi_theme") || "emerald";
+  setAppTheme(savedTheme, false);
+
+  const toggleBtn = document.getElementById("themeToggleBtn");
+  const dropdown = document.getElementById("themeDropdown");
+
+  if (toggleBtn && dropdown) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!toggleBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add("hidden");
+      }
+    });
+  }
+}
+
+window.setAppTheme = function(themeName, notify = true) {
+  if (!THEMES[themeName]) themeName = 'emerald';
+  const theme = THEMES[themeName];
+
+  document.documentElement.setAttribute('data-theme', themeName);
+  localStorage.setItem('gezi_theme', themeName);
+
+  // Meta theme-color güncelle (Mobil tarayıcı adres çubuğu için)
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    metaThemeColor.setAttribute('content', theme.color);
+  }
+
+  // Header display güncelle
+  const nameDisplay = document.getElementById("themeNameDisplay");
+  if (nameDisplay) nameDisplay.innerText = theme.shortName;
+
+  const iconEl = document.getElementById("themeIcon");
+  if (iconEl) {
+    iconEl.setAttribute('data-lucide', theme.icon);
+    if (themeName === 'emerald') {
+      iconEl.className = "w-4 h-4 text-emerald-500";
+    } else if (themeName === 'ocean') {
+      iconEl.className = "w-4 h-4 text-sky-500";
+    } else {
+      iconEl.className = "w-4 h-4 text-amber-400";
+    }
+  }
+
+  // Dropdown'ı kapat
+  const dropdown = document.getElementById("themeDropdown");
+  if (dropdown) dropdown.classList.add("hidden");
+
+  initIcons();
+
+  if (map) {
+    map.invalidateSize();
+  }
+
+  if (notify) {
+    showToast(`${theme.name} teması seçildi! ✨`);
+  }
+};
 
 // LocalStorage işlemleri
 function loadPlaces() {
@@ -218,10 +308,10 @@ function updateMapMarkers(placesToShow) {
     const latlng = [place.lat, place.lng];
     latlngs.push(latlng);
 
-    // Skor rengi
-    let colorClass = "bg-rose-500";
-    if (place.score >= 9.0) colorClass = "bg-emerald-600";
-    else if (place.score >= 7.5) colorClass = "bg-amber-500";
+    // Mavi & Yeşil Paleti: 9.0+ Zümrüt Yeşili, 7.5-8.9 Okyanus Mavisi, altı Gül Pembesi
+    let colorClass = "bg-rose-500 shadow-rose-500/30";
+    if (place.score >= 9.0) colorClass = "bg-emerald-600 shadow-emerald-500/30";
+    else if (place.score >= 7.5) colorClass = "bg-sky-600 shadow-sky-500/30";
 
     const customIcon = L.divIcon({
       className: "custom-div-icon",
@@ -239,16 +329,16 @@ function updateMapMarkers(placesToShow) {
     const popupImg = place.image ? `<img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-24 object-cover rounded-xl mb-2" />` : '';
 
     const popupHtml = `
-      <div class="p-2 min-w-[210px] max-w-[240px]">
+      <div class="p-2 min-w-[210px] max-w-[240px] theme-bg-card theme-text-main">
         ${popupImg}
-        <div class="flex items-center justify-between gap-2 mb-1">
-          <span class="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">${escapeHtml(place.district)}</span>
-          <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">★ ${Number(place.score).toFixed(1)}/10</span>
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">${escapeHtml(place.district)}</span>
+          <span class="text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-lg border border-sky-200/50">★ ${Number(place.score).toFixed(1)}/10</span>
         </div>
-        <h4 class="font-bold text-slate-900 text-sm mb-0.5">${escapeHtml(place.name)}</h4>
-        <p class="text-xs text-slate-500 mb-2">🏷️ ${escapeHtml(place.category)}</p>
-        ${place.favorite ? `<p class="text-xs text-slate-700 bg-slate-50 p-1.5 rounded mb-2"><strong>Favori:</strong> ${escapeHtml(place.favorite)}</p>` : ''}
-        <button onclick="window.focusPlaceCard('${place.id}')" class="w-full text-center text-xs py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded transition">
+        <h4 class="font-extrabold theme-text-main text-sm mb-0.5">${escapeHtml(place.name)}</h4>
+        <p class="text-xs theme-text-muted mb-2">🏷️ ${escapeHtml(place.category)}</p>
+        ${place.favorite ? `<p class="text-xs theme-text-main theme-bg-surface p-1.5 rounded-xl mb-2 border theme-border font-medium"><strong>Favori:</strong> ${escapeHtml(place.favorite)}</p>` : ''}
+        <button onclick="window.focusPlaceCard('${place.id}')" class="w-full text-center text-xs py-1.5 theme-bg-surface hover:opacity-85 theme-text-main font-bold rounded-xl transition border theme-border">
           Detayları Gör
         </button>
       </div>
@@ -333,21 +423,32 @@ function renderPlaces() {
   filtered.forEach(place => {
     const card = document.createElement("div");
     card.id = `card-${place.id}`;
-    card.className = "bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
+    card.className = "theme-bg-card rounded-3xl border theme-border p-4 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
 
     // Kategoriye göre ikon/etiket
-    let catBadgeColor = "bg-rose-50 text-rose-700 border-rose-200/80";
+    let catBadgeColor = "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/80";
     let catIcon = "🍽️";
-    if (place.category === 'Gezilecek Yer') { catBadgeColor = "bg-sky-50 text-sky-700 border-sky-200/80"; catIcon = "🏛️"; }
-    else if (place.category === 'Cafe') { catBadgeColor = "bg-amber-50 text-amber-700 border-amber-200/80"; catIcon = "☕"; }
-    else if (place.category === 'Tatlı') { catBadgeColor = "bg-purple-50 text-purple-700 border-purple-200/80"; catIcon = "🍰"; }
-    else if (place.category === 'Sokak Lezzeti') { catBadgeColor = "bg-orange-50 text-orange-700 border-orange-200/80"; catIcon = "🌯"; }
-    else if (place.category === 'Meyhane / Bar') { catBadgeColor = "bg-indigo-50 text-indigo-700 border-indigo-200/80"; catIcon = "🍸"; }
+    if (place.category === 'Gezilecek Yer') { 
+      catBadgeColor = "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200/80 dark:border-sky-800/80"; 
+      catIcon = "🏛️"; 
+    } else if (place.category === 'Cafe') { 
+      catBadgeColor = "bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200/80 dark:border-teal-800/80"; 
+      catIcon = "☕"; 
+    } else if (place.category === 'Tatlı') { 
+      catBadgeColor = "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/80"; 
+      catIcon = "🍰"; 
+    } else if (place.category === 'Sokak Lezzeti') { 
+      catBadgeColor = "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/80"; 
+      catIcon = "🌯"; 
+    } else if (place.category === 'Meyhane / Bar') { 
+      catBadgeColor = "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800/80"; 
+      catIcon = "🍸"; 
+    }
 
-    // Skor rozeti
-    let scoreBadgeColor = "bg-emerald-500 text-white shadow-emerald-500/25";
+    // Skor rozeti (Mavi & Yeşil Paleti)
+    let scoreBadgeColor = "bg-emerald-600 text-white shadow-emerald-500/25";
     if (place.score < 7.5) scoreBadgeColor = "bg-rose-500 text-white shadow-rose-500/25";
-    else if (place.score < 9.0) scoreBadgeColor = "bg-amber-500 text-white shadow-amber-500/25";
+    else if (place.score < 9.0) scoreBadgeColor = "bg-sky-600 text-white shadow-sky-500/25";
 
     // Google Maps Yol Tarifi linki
     const gmapsUrl = place.lat && place.lng 
@@ -356,7 +457,7 @@ function renderPlaces() {
 
     // Mekan Fotoğrafı HTML (Varsa şık kapak banner'ı)
     const imageHtml = place.image ? `
-      <div class="relative w-full h-36 rounded-2xl overflow-hidden mb-3 border border-slate-100 shadow-inner group-hover:scale-[1.01] transition duration-300">
+      <div class="relative w-full h-36 rounded-2xl overflow-hidden mb-3 border theme-border shadow-inner group-hover:scale-[1.01] transition duration-300">
         <img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-full object-cover" loading="lazy" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
       </div>
@@ -372,11 +473,11 @@ function renderPlaces() {
                 <span>${catIcon}</span>
                 <span>${escapeHtml(place.category)}</span>
               </span>
-              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg theme-bg-surface theme-text-muted border theme-border">
                 📍 ${escapeHtml(place.district)}
               </span>
             </div>
-            <h3 class="text-base font-extrabold text-slate-900 group-hover:text-rose-600 transition leading-snug">${escapeHtml(place.name)}</h3>
+            <h3 class="text-base font-extrabold theme-text-main group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition leading-snug">${escapeHtml(place.name)}</h3>
           </div>
           
           <div class="flex flex-col items-end shrink-0">
@@ -388,39 +489,39 @@ function renderPlaces() {
         </div>
 
         ${place.favorite ? `
-          <div class="mt-2.5 text-xs bg-gradient-to-r from-slate-50 to-amber-50/40 border border-slate-100 p-2.5 rounded-xl">
-            <div class="flex items-center gap-1 text-[11px] font-bold text-amber-800 mb-0.5">
-              <i data-lucide="sparkles" class="w-3 h-3 text-amber-500"></i>
-              <span>Favori Lezzet:</span>
+          <div class="mt-2.5 text-xs theme-bg-surface border theme-border p-2.5 rounded-xl">
+            <div class="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-0.5">
+              <i data-lucide="sparkles" class="w-3 h-3 text-emerald-500"></i>
+              <span>Favori / Meşhur:</span>
             </div>
-            <span class="text-slate-700 font-medium">${escapeHtml(place.favorite)}</span>
+            <span class="theme-text-main font-medium">${escapeHtml(place.favorite)}</span>
           </div>
         ` : ''}
 
         ${place.notes ? `
-          <p class="mt-2.5 text-xs text-slate-500 italic line-clamp-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+          <p class="mt-2.5 text-xs theme-text-muted italic line-clamp-2 theme-bg-surface/60 p-2 rounded-xl border theme-border">
             "${escapeHtml(place.notes)}"
           </p>
         ` : ''}
       </div>
 
-      <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+      <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between text-xs">
         <div class="flex items-center gap-2">
-          <button onclick="window.zoomToPlace('${place.id}')" class="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 bg-rose-50 hover:bg-rose-100/80 px-2.5 py-1.5 rounded-xl transition">
+          <button onclick="window.zoomToPlace('${place.id}')" class="text-emerald-600 dark:text-emerald-400 hover:opacity-85 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl transition border border-emerald-200/50 dark:border-emerald-800/50">
             <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
             <span>Haritada</span>
           </button>
-          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1 bg-slate-100 hover:bg-slate-200/70 px-2.5 py-1.5 rounded-xl transition" title="Google Haritalar ile Yol Tarifi Al">
-            <i data-lucide="navigation" class="w-3.5 h-3.5 text-blue-500"></i>
+          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="theme-text-muted hover:theme-text-main font-semibold flex items-center gap-1 theme-bg-surface hover:opacity-85 px-2.5 py-1.5 rounded-xl transition border theme-border" title="Google Haritalar ile Yol Tarifi Al">
+            <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-500"></i>
             <span class="hidden sm:inline">Git</span>
           </a>
         </div>
         
         <div class="flex items-center gap-1">
-          <button onclick="window.editPlace('${place.id}')" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition" title="Düzenle">
+          <button onclick="window.editPlace('${place.id}')" class="p-2 theme-text-muted hover:theme-text-main hover:theme-bg-surface rounded-xl transition" title="Düzenle">
             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
           </button>
-          <button onclick="window.deletePlace('${place.id}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition" title="Sil">
+          <button onclick="window.deletePlace('${place.id}')" class="p-2 theme-text-muted hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition" title="Sil">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
@@ -568,7 +669,7 @@ function renderRouteResult(district, route) {
   const resultWrapper = document.getElementById("routeResultContainer");
   const title = document.getElementById("routeTitle");
 
-  title.innerHTML = `<i data-lucide="footprints" class="w-5 h-5 text-rose-500"></i> ${district} Gurme Gezi Rotası (${route.length} Durak)`;
+  title.innerHTML = `<i data-lucide="footprints" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i> ${district} Gezi & Lezzet Rotası (${route.length} Durak)`;
 
   container.innerHTML = "";
   resultWrapper.classList.remove("hidden");
@@ -594,27 +695,27 @@ function renderRouteResult(district, route) {
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
 
     step.innerHTML = `
-      <div class="absolute left-3 -translate-x-1/2 w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-extrabold text-xs flex items-center justify-center ring-4 ring-white shadow-md">
+      <div class="absolute left-3 -translate-x-1/2 w-7 h-7 rounded-full theme-gradient-btn text-white font-extrabold text-xs flex items-center justify-center ring-4 ring-white dark:ring-slate-900 shadow-md">
         ${index + 1}
       </div>
-      <div class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition">
+      <div class="theme-bg-card rounded-3xl p-4 border theme-border shadow-sm hover:shadow-md transition">
         <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100">${item.role}</span>
-          <span class="text-xs font-black bg-amber-500 text-white px-2.5 py-0.5 rounded-xl shadow-xs">★ ${place.score}</span>
+          <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800">${item.role}</span>
+          <span class="text-xs font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-xl shadow-xs">★ ${place.score}</span>
         </div>
-        <h4 class="text-base font-extrabold text-slate-900">${escapeHtml(place.name)}</h4>
-        <p class="text-xs text-slate-500 mb-2">🏷️ ${escapeHtml(place.category)} • 📍 ${escapeHtml(place.district)}</p>
+        <h4 class="text-base font-extrabold theme-text-main">${escapeHtml(place.name)}</h4>
+        <p class="text-xs theme-text-muted mb-2">🏷️ ${escapeHtml(place.category)} • 📍 ${escapeHtml(place.district)}</p>
         ${place.favorite ? `
-          <div class="text-xs bg-slate-50 p-2.5 rounded-xl text-slate-700 mb-2 border border-slate-100">
-            <span class="font-bold text-amber-700">🌟 Ne Yenmeli:</span> ${escapeHtml(place.favorite)}
+          <div class="text-xs theme-bg-surface p-2.5 rounded-xl theme-text-main mb-2 border theme-border">
+            <span class="font-bold text-emerald-600 dark:text-emerald-400">🌟 Ne Yenmeli:</span> ${escapeHtml(place.favorite)}
           </div>
         ` : ''}
-        ${place.notes ? `<p class="text-xs text-slate-500 italic mb-2">"${escapeHtml(place.notes)}"</p>` : ''}
-        <div class="mt-2 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 bg-slate-100 px-2.5 py-1.5 rounded-xl transition">
-            <i data-lucide="navigation" class="w-3.5 h-3.5 text-blue-500"></i> Yol Tarifi
+        ${place.notes ? `<p class="text-xs theme-text-muted italic mb-2">"${escapeHtml(place.notes)}"</p>` : ''}
+        <div class="mt-2 pt-2.5 border-t theme-border flex items-center justify-between">
+          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-xs theme-text-muted hover:theme-text-main font-bold flex items-center gap-1 theme-bg-surface px-2.5 py-1.5 rounded-xl transition border theme-border">
+            <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-500"></i> Yol Tarifi
           </a>
-          <button onclick="window.zoomToPlace('${place.id}')" class="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 bg-rose-50 px-2.5 py-1.5 rounded-xl transition">
+          <button onclick="window.zoomToPlace('${place.id}')" class="text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-85 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl transition border border-emerald-200/50 dark:border-emerald-800/50">
             <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Haritada Gör
           </button>
         </div>
@@ -624,13 +725,13 @@ function renderRouteResult(district, route) {
     container.appendChild(step);
   });
 
-  // Haritaya rota çizgisi ekle
+  // Haritaya rota çizgisi ekle (Modern Zümrüt Yeşili Çizgi)
   if (routeCoords.length > 1) {
     routePolyline = L.polyline(routeCoords, {
-      color: '#f43f5e',
+      color: '#059669',
       weight: 4,
       dashArray: '8, 8',
-      opacity: 0.8
+      opacity: 0.9
     }).addTo(map);
 
     map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
@@ -664,7 +765,7 @@ function renderCustomPlacesPicker() {
   places.forEach(p => {
     const isChecked = selectedCustomPlaceIds.has(p.id);
     const row = document.createElement("label");
-    row.className = `p-2.5 flex items-center justify-between cursor-pointer rounded-xl transition ${isChecked ? 'bg-amber-50/80 font-bold' : 'hover:bg-slate-50'}`;
+    row.className = `p-2.5 flex items-center justify-between cursor-pointer rounded-xl transition ${isChecked ? 'bg-emerald-500/15 border border-emerald-500/40 font-bold' : 'hover:theme-bg-surface border border-transparent'}`;
     
     let icon = "🍽️";
     if (p.category === 'Gezilecek Yer') icon = "🏛️";
@@ -673,14 +774,14 @@ function renderCustomPlacesPicker() {
 
     row.innerHTML = `
       <div class="flex items-center gap-2.5 overflow-hidden">
-        <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 accent-amber-500 rounded cursor-pointer shrink-0" />
+        <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0" />
         <span class="text-sm shrink-0">${icon}</span>
         <div class="truncate">
-          <span class="text-xs text-slate-900 block truncate">${escapeHtml(p.name)}</span>
-          <span class="text-[10px] text-slate-400 block">${escapeHtml(p.district)} • ★ ${Number(p.score).toFixed(1)}</span>
+          <span class="text-xs theme-text-main block truncate">${escapeHtml(p.name)}</span>
+          <span class="text-[10px] theme-text-muted block">${escapeHtml(p.district)} • ★ ${Number(p.score).toFixed(1)}</span>
         </div>
       </div>
-      <span class="text-[10px] px-2 py-0.5 rounded-md ${isChecked ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'} shrink-0 font-bold">
+      <span class="text-[10px] px-2 py-0.5 rounded-md ${isChecked ? 'bg-emerald-600 text-white' : 'theme-bg-surface theme-text-muted border theme-border'} shrink-0 font-bold">
         ${isChecked ? 'Seçildi' : 'Ekle'}
       </span>
     `;
@@ -769,8 +870,8 @@ window.focusPlaceCard = function(id) {
     const card = document.getElementById(`card-${id}`);
     if (card) {
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.classList.add("ring-2", "ring-rose-500");
-      setTimeout(() => card.classList.remove("ring-2", "ring-rose-500"), 2000);
+      card.classList.add("ring-2", "ring-emerald-500");
+      setTimeout(() => card.classList.remove("ring-2", "ring-emerald-500"), 2000);
     }
   }, 100);
 };
@@ -845,20 +946,20 @@ function switchTab(tab) {
   const isMobile = window.innerWidth < 1024;
 
   const resetStyles = () => {
-    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
-    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
-    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
+    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
+    if (mTabMap) mTabMap.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
+    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
     
-    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
-    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
-    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
+    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
+    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
+    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
   };
 
   resetStyles();
 
   if (tab === 'places') {
-    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
-    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-2";
+    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-2";
     
     viewPlaces.classList.remove("hidden");
     viewRoute.classList.add("hidden");
@@ -869,8 +970,8 @@ function switchTab(tab) {
       else rightCol.classList.remove("hidden");
     }
 
-    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-lg transition text-slate-900 bg-white shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-rose-500 font-bold text-[10px]";
+    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]";
 
     if (routePolyline) {
       map.removeLayer(routePolyline);
@@ -886,8 +987,8 @@ function switchTab(tab) {
       rightCol.style.display = "flex";
     }
 
-    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-blue-600 bg-white shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-blue-500 font-bold text-[10px]";
+    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card text-sky-600 dark:text-sky-400 shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-sky-600 dark:text-sky-400 font-bold text-[10px]";
 
     // Haritayı hemen ve 150ms sonra tekrar tazele
     const refreshMap = () => {
@@ -909,8 +1010,8 @@ function switchTab(tab) {
     setTimeout(refreshMap, 150);
     setTimeout(refreshMap, 350);
   } else if (tab === 'route') {
-    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
-    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-2";
+    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-2";
     
     viewRoute.classList.remove("hidden");
     viewPlaces.classList.add("hidden");
@@ -921,8 +1022,8 @@ function switchTab(tab) {
       else rightCol.classList.remove("hidden");
     }
 
-    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-amber-700 bg-white shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-amber-500 font-bold text-[10px]";
+    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card text-emerald-600 dark:text-emerald-400 shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]";
   }
   initIcons();
 }
@@ -987,15 +1088,15 @@ function setupEventListeners() {
 
   if (modeAutoBtn && modeCustomBtn && autoPanel && customPanel) {
     modeAutoBtn.addEventListener("click", () => {
-      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5";
-      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5";
+      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
+      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5";
       autoPanel.classList.remove("hidden");
       customPanel.classList.add("hidden");
     });
 
     modeCustomBtn.addEventListener("click", () => {
-      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5";
-      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5";
+      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
+      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5";
       customPanel.classList.remove("hidden");
       autoPanel.classList.add("hidden");
       renderCustomPlacesPicker();
