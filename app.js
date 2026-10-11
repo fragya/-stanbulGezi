@@ -98,6 +98,30 @@ const DEFAULT_PLACES = [
     notes: "İstanbul'un en iyi gurme burgercilerinden biri. Sosları efsane.",
     lat: 41.0440,
     lng: 29.0030,
+    createdAt: Date.now() - 25000
+  },
+  {
+    id: "p8",
+    name: "Galata Kulesi & Meydanı",
+    district: "Beyoğlu",
+    category: "Gezilecek Yer",
+    score: 9.6,
+    favorite: "Tarihi Kule Manzarası & Galata Sokakları Yürüyüşü",
+    notes: "Gün batımında tarihi yarımada ve Boğaz manzarası büyüleyici.",
+    lat: 41.0256,
+    lng: 28.9741,
+    createdAt: Date.now() - 10000
+  },
+  {
+    id: "p9",
+    name: "Moda Sahili & İskele Parkı",
+    district: "Moda",
+    category: "Gezilecek Yer",
+    score: 9.5,
+    favorite: "Sahil Yürüyüşü, Çimlerde Oturma, Tarihi İskele",
+    notes: "Kadıköy turunun vazgeçilmez açık hava ve dinlenme noktası.",
+    lat: 40.9790,
+    lng: 29.0250,
     createdAt: Date.now()
   }
 ];
@@ -314,7 +338,8 @@ function renderPlaces() {
     // Kategoriye göre ikon/etiket
     let catBadgeColor = "bg-rose-50 text-rose-700 border-rose-200/80";
     let catIcon = "🍽️";
-    if (place.category === 'Cafe') { catBadgeColor = "bg-amber-50 text-amber-700 border-amber-200/80"; catIcon = "☕"; }
+    if (place.category === 'Gezilecek Yer') { catBadgeColor = "bg-sky-50 text-sky-700 border-sky-200/80"; catIcon = "🏛️"; }
+    else if (place.category === 'Cafe') { catBadgeColor = "bg-amber-50 text-amber-700 border-amber-200/80"; catIcon = "☕"; }
     else if (place.category === 'Tatlı') { catBadgeColor = "bg-purple-50 text-purple-700 border-purple-200/80"; catIcon = "🍰"; }
     else if (place.category === 'Sokak Lezzeti') { catBadgeColor = "bg-orange-50 text-orange-700 border-orange-200/80"; catIcon = "🌯"; }
     else if (place.category === 'Meyhane / Bar') { catBadgeColor = "bg-indigo-50 text-indigo-700 border-indigo-200/80"; catIcon = "🍸"; }
@@ -430,14 +455,14 @@ function renderDistrictDropdowns() {
   }
 
   // Rota ilçe select
-  routeDistrict.innerHTML = '';
+  routeDistrict.innerHTML = '<option value="all">🌐 Tüm İstanbul (Semt Bağımsız Rota)</option>';
   if (uniqueDistricts.length === 0) {
-    routeDistrict.innerHTML = '<option value="">Henüz mekan yok</option>';
+    routeDistrict.innerHTML += '<option value="">Henüz mekan yok</option>';
   } else {
     uniqueDistricts.forEach(d => {
       const opt = document.createElement("option");
       opt.value = d;
-      opt.textContent = `${d} (${places.filter(p => p.district === d).length} Mekan)`;
+      opt.textContent = `📍 ${d} (${places.filter(p => p.district === d).length} Mekan)`;
       routeDistrict.appendChild(opt);
     });
     // Kadıköy varsa varsayılan yap
@@ -445,86 +470,97 @@ function renderDistrictDropdowns() {
       routeDistrict.value = "Kadıköy";
     }
   }
+
+  // Özel mekan seçici listesini güncelle
+  renderCustomPlacesPicker();
 }
 
-// ROTA SİHİRBAZI OLUŞTURUCU
+// ROTA SİHİRBAZI OLUŞTURUCU (Otomatik Mod)
 function generateRoute() {
   const district = document.getElementById("routeDistrictSelect").value;
   const stopCount = parseInt(document.getElementById("routeStopCount").value, 10) || 3;
 
-  if (!district) {
-    showToast("Lütfen bir bölge seçin!", "error");
+  // Seçilen bölgedeki mekanları al veya semt bağımsız Tüm İstanbul'u kullan
+  let pool = (district === 'all') 
+    ? [...places] 
+    : places.filter(p => p.district.toLowerCase() === district.toLowerCase());
+
+  if (pool.length === 0) {
+    showToast(`Seçilen kriterde mekan bulunamadı!`, "error");
     return;
   }
 
-  // Seçilen bölgedeki mekanları al
-  let districtPlaces = places.filter(p => p.district.toLowerCase() === district.toLowerCase());
-
-  if (districtPlaces.length === 0) {
-    showToast(`${district} bölgesinde kayıtlı mekan yok!`, "error");
-    return;
-  }
-
-  // Akıllı sıralama:
-  // Durak 1: Yemek veya Sokak Lezzeti (veya en yüksek puanlı mekan)
-  // Durak 2: Cafe / Kahve
-  // Durak 3: Tatlı veya Cafe
-  // Durak 4: Bar veya alternatif mekan
+  // Akıllı Gezi & Lezzet Sıralaması:
+  // Durak 1: Gezilecek Yer (varsa) veya Popüler Yemek
+  // Durak 2: Öğle/Akşam Yemeği veya Sokak Lezzeti
+  // Durak 3: Nitelikli Kahve / Cafe
+  // Durak 4: Tatlıcı
+  // Durak 5: Akşam kapanışı / Manzara / Bar
 
   let route = [];
-  let pool = [...districtPlaces];
 
-  // Kategorilere göre grupla
+  const sightPlaces = pool.filter(p => p.category === 'Gezilecek Yer').sort((a,b) => b.score - a.score);
   const foodPlaces = pool.filter(p => p.category === 'Yemek' || p.category === 'Sokak Lezzeti').sort((a,b) => b.score - a.score);
   const cafePlaces = pool.filter(p => p.category === 'Cafe').sort((a,b) => b.score - a.score);
   const dessertPlaces = pool.filter(p => p.category === 'Tatlı').sort((a,b) => b.score - a.score);
   const otherPlaces = pool.filter(p => p.category === 'Meyhane / Bar').sort((a,b) => b.score - a.score);
 
-  // 1. Durak (Yemek)
-  if (foodPlaces.length > 0) {
-    route.push({ place: foodPlaces[0], role: "1. Durak: Öğle / Akşam Yemeği 🍽️" });
-  } else if (pool.length > 0) {
-    route.push({ place: pool[0], role: "1. Durak: Başlangıç Lezzeti 📍" });
+  // 1. Durak (Gezilecek Yer veya Başlangıç Yemeği)
+  if (sightPlaces.length > 0) {
+    route.push({ place: sightPlaces[0], role: "1. Durak: Gezi & Keşif Noktası 🏛️" });
+  } else if (foodPlaces.length > 0) {
+    route.push({ place: foodPlaces[0], role: "1. Durak: Başlangıç Lezzeti 🍽️" });
+  } else {
+    route.push({ place: pool[0], role: "1. Durak: İlk Durak 📍" });
   }
 
-  // 2. Durak (Kahve & Dinlenme)
-  const remainingCafes = cafePlaces.filter(c => !route.some(r => r.place.id === c.id));
-  if (remainingCafes.length > 0) {
-    route.push({ place: remainingCafes[0], role: "2. Durak: Kahve Molası ☕" });
+  // 2. Durak (Yemek veya Cafe)
+  const remainingFoods = foodPlaces.filter(f => !route.some(r => r.place.id === f.id));
+  if (remainingFoods.length > 0) {
+    route.push({ place: remainingFoods[0], role: "2. Durak: Öğle / Akşam Yemeği 🍽️" });
   } else {
     const nextBest = pool.filter(p => !route.some(r => r.place.id === p.id)).sort((a,b) => b.score - a.score)[0];
     if (nextBest && route.length < stopCount) {
-      route.push({ place: nextBest, role: "2. Durak: Keyif Molası ☕" });
+      route.push({ place: nextBest, role: "2. Durak: Mola & Tadım 😋" });
     }
   }
 
-  // 3. Durak (Tatlı veya Özel Kapanış)
-  if (stopCount >= 3) {
-    const remainingDesserts = dessertPlaces.filter(d => !route.some(r => r.place.id === d.id));
-    if (remainingDesserts.length > 0) {
-      route.push({ place: remainingDesserts[0], role: "3. Durak: Tatlı Şöleni 🍰" });
+  // 3. Durak (Kahve / Cafe)
+  if (route.length < stopCount) {
+    const remainingCafes = cafePlaces.filter(c => !route.some(r => r.place.id === c.id));
+    if (remainingCafes.length > 0) {
+      route.push({ place: remainingCafes[0], role: "3. Durak: Kahve & Sohbet Molası ☕" });
     } else {
       const nextBest = pool.filter(p => !route.some(r => r.place.id === p.id)).sort((a,b) => b.score - a.score)[0];
-      if (nextBest) {
-        route.push({ place: nextBest, role: "3. Durak: Günün Kapanışı ✨" });
-      }
+      if (nextBest) route.push({ place: nextBest, role: "3. Durak: Dinlenme Durağı ✨" });
     }
   }
 
-  // 4. Durak (Opsiyonel kokteyl veya ekstra mekan)
-  if (stopCount >= 4) {
+  // 4. Durak (Tatlı veya Gezilecek İkinci Yer)
+  if (route.length < stopCount) {
+    const remainingDesserts = dessertPlaces.filter(d => !route.some(r => r.place.id === d.id));
+    const remainingSights = sightPlaces.filter(s => !route.some(r => r.place.id === s.id));
+    
+    if (remainingDesserts.length > 0) {
+      route.push({ place: remainingDesserts[0], role: "4. Durak: Tatlı Şöleni 🍰" });
+    } else if (remainingSights.length > 0) {
+      route.push({ place: remainingSights[0], role: "4. Durak: İkinci Gezi Noktası 🏛️" });
+    } else {
+      const nextBest = pool.filter(p => !route.some(r => r.place.id === p.id)).sort((a,b) => b.score - a.score)[0];
+      if (nextBest) route.push({ place: nextBest, role: "4. Durak: Lezzet Durağı 🌟" });
+    }
+  }
+
+  // 5. Durak (Akşam Kapanışı)
+  if (route.length < stopCount) {
     const nextBest = pool.filter(p => !route.some(r => r.place.id === p.id)).sort((a,b) => b.score - a.score)[0];
     if (nextBest) {
-      route.push({ place: nextBest, role: "4. Durak: Akşam Kapanışı / İçecek 🍸" });
+      route.push({ place: nextBest, role: "5. Durak: Günün Kapanışı 🍸" });
     }
   }
 
-  if (route.length === 0) {
-    showToast("Bu bölgede yeterli mekan bulunamadı.", "error");
-    return;
-  }
-
-  renderRouteResult(district, route);
+  const titlePrefix = (district === 'all') ? "İstanbul Geneli" : district;
+  renderRouteResult(titlePrefix, route);
 }
 
 function renderRouteResult(district, route) {
@@ -608,6 +644,107 @@ function renderRouteResult(district, route) {
 
   initIcons();
   showToast(`${district} için lezzet rotanız oluşturuldu! 🎉`);
+}
+
+// -------------------------------------------------------------
+// ÖZEL MEKAN SEÇİCİ & SEMT BAĞIMSIZ ROTA MOTORU
+// -------------------------------------------------------------
+let selectedCustomPlaceIds = new Set();
+
+function renderCustomPlacesPicker() {
+  const container = document.getElementById("customPlacesPickerList");
+  if (!container) return;
+
+  container.innerHTML = "";
+  if (places.length === 0) {
+    container.innerHTML = `<p class="text-xs text-slate-400 p-3 text-center">Kayıtlı mekan bulunmuyor.</p>`;
+    return;
+  }
+
+  places.forEach(p => {
+    const isChecked = selectedCustomPlaceIds.has(p.id);
+    const row = document.createElement("label");
+    row.className = `p-2.5 flex items-center justify-between cursor-pointer rounded-xl transition ${isChecked ? 'bg-amber-50/80 font-bold' : 'hover:bg-slate-50'}`;
+    
+    let icon = "🍽️";
+    if (p.category === 'Gezilecek Yer') icon = "🏛️";
+    else if (p.category === 'Cafe') icon = "☕";
+    else if (p.category === 'Tatlı') icon = "🍰";
+
+    row.innerHTML = `
+      <div class="flex items-center gap-2.5 overflow-hidden">
+        <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 accent-amber-500 rounded cursor-pointer shrink-0" />
+        <span class="text-sm shrink-0">${icon}</span>
+        <div class="truncate">
+          <span class="text-xs text-slate-900 block truncate">${escapeHtml(p.name)}</span>
+          <span class="text-[10px] text-slate-400 block">${escapeHtml(p.district)} • ★ ${Number(p.score).toFixed(1)}</span>
+        </div>
+      </div>
+      <span class="text-[10px] px-2 py-0.5 rounded-md ${isChecked ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'} shrink-0 font-bold">
+        ${isChecked ? 'Seçildi' : 'Ekle'}
+      </span>
+    `;
+
+    const checkbox = row.querySelector("input");
+    checkbox.addEventListener("change", (e) => {
+      if (e.target.checked) selectedCustomPlaceIds.add(p.id);
+      else selectedCustomPlaceIds.delete(p.id);
+      updateSelectedPlacesCount();
+      renderCustomPlacesPicker();
+    });
+
+    container.appendChild(row);
+  });
+
+  updateSelectedPlacesCount();
+}
+
+function updateSelectedPlacesCount() {
+  const counter = document.getElementById("selectedPlacesCounter");
+  if (counter) {
+    counter.innerText = `${selectedCustomPlaceIds.size} mekan seçildi`;
+  }
+}
+
+function generateCustomRoute() {
+  if (selectedCustomPlaceIds.size < 2) {
+    showToast("Lütfen en az 2 mekan seçin!", "error");
+    return;
+  }
+
+  const selectedPlaces = places.filter(p => selectedCustomPlaceIds.has(p.id));
+  
+  // Seçilen mekanları akıllı mantıkla sırala:
+  // Önce Gezilecek Yerler -> Yemek -> Cafe -> Tatlı -> Bar
+  const categoryOrder = {
+    "Gezilecek Yer": 1,
+    "Yemek": 2,
+    "Sokak Lezzeti": 2,
+    "Cafe": 3,
+    "Tatlı": 4,
+    "Meyhane / Bar": 5
+  };
+
+  selectedPlaces.sort((a, b) => {
+    const orderA = categoryOrder[a.category] || 3;
+    const orderB = categoryOrder[b.category] || 3;
+    return orderA - orderB;
+  });
+
+  const route = selectedPlaces.map((p, idx) => {
+    let role = `${idx + 1}. Durak: ${p.category} Durağı`;
+    if (p.category === 'Gezilecek Yer') role = `${idx + 1}. Durak: Gezi & Keşif 🏛️`;
+    else if (p.category === 'Yemek' || p.category === 'Sokak Lezzeti') role = `${idx + 1}. Durak: Lezzet Molası 🍽️`;
+    else if (p.category === 'Cafe') role = `${idx + 1}. Durak: Kahve Durağı ☕`;
+    else if (p.category === 'Tatlı') role = `${idx + 1}. Durak: Tatlı Şöleni 🍰`;
+
+    return {
+      place: p,
+      role: role
+    };
+  });
+
+  renderRouteResult("Özel Seçim", route);
 }
 
 // Global Etkileşimler
@@ -835,11 +972,46 @@ function setupEventListeners() {
     });
   }
 
+  // Filtreler
   document.getElementById("districtFilter").addEventListener("change", renderPlaces);
   document.getElementById("categoryFilter").addEventListener("change", renderPlaces);
   document.getElementById("sortFilter").addEventListener("change", renderPlaces);
 
   document.getElementById("generateRouteBtn").addEventListener("click", generateRoute);
+
+  // Rota Modu Değiştirme (Otomatik vs Özel Mekan Seçimi)
+  const modeAutoBtn = document.getElementById("routeModeAuto");
+  const modeCustomBtn = document.getElementById("routeModeCustom");
+  const autoPanel = document.getElementById("routeAutoPanel");
+  const customPanel = document.getElementById("routeCustomPanel");
+
+  if (modeAutoBtn && modeCustomBtn && autoPanel && customPanel) {
+    modeAutoBtn.addEventListener("click", () => {
+      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5";
+      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5";
+      autoPanel.classList.remove("hidden");
+      customPanel.classList.add("hidden");
+    });
+
+    modeCustomBtn.addEventListener("click", () => {
+      modeCustomBtn.className = "flex-1 py-2 rounded-xl text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5";
+      modeAutoBtn.className = "flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5";
+      customPanel.classList.remove("hidden");
+      autoPanel.classList.add("hidden");
+      renderCustomPlacesPicker();
+    });
+  }
+
+  // Özel Rota Butonları
+  const generateCustomBtn = document.getElementById("generateCustomRouteBtn");
+  if (generateCustomBtn) generateCustomBtn.addEventListener("click", generateCustomRoute);
+
+  const clearCustomBtn = document.getElementById("clearCustomSelectionBtn");
+  if (clearCustomBtn) clearCustomBtn.addEventListener("click", () => {
+    selectedCustomPlaceIds.clear();
+    renderCustomPlacesPicker();
+    showToast("Seçimler temizlendi.");
+  });
 
   // Puan slider senkronizasyonu
   const scoreSlider = document.getElementById("modalPlaceScore");
