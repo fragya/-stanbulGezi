@@ -239,13 +239,21 @@ function updateMapMarkers(placesToShow) {
 
 // İstatistikleri güncelleme
 function updateStats() {
-  document.getElementById("placesCountBadge").innerText = places.length;
-  if (places.length === 0) {
-    document.getElementById("avgScoreDisplay").innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-500 text-amber-500"></i> -`;
-  } else {
-    const sum = places.reduce((acc, p) => acc + Number(p.score || 0), 0);
-    const avg = (sum / places.length).toFixed(1);
-    document.getElementById("avgScoreDisplay").innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-500 text-amber-500"></i> ${avg} / 10`;
+  const badge = document.getElementById("placesCountBadge");
+  if (badge) badge.innerText = places.length;
+  
+  const mBadge = document.getElementById("mobileCountDisplay");
+  if (mBadge) mBadge.innerText = `${places.length} Mekan`;
+
+  const avgDisplay = document.getElementById("avgScoreDisplay");
+  if (avgDisplay) {
+    if (places.length === 0) {
+      avgDisplay.innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-500 text-amber-500"></i> - / 10`;
+    } else {
+      const sum = places.reduce((acc, p) => acc + Number(p.score || 0), 0);
+      const avg = (sum / places.length).toFixed(1);
+      avgDisplay.innerHTML = `<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-500 text-amber-500"></i> ${avg} / 10`;
+    }
   }
   initIcons();
 }
@@ -298,59 +306,84 @@ function renderPlaces() {
   filtered.forEach(place => {
     const card = document.createElement("div");
     card.id = `card-${place.id}`;
-    card.className = "bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between group";
+    card.className = "bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
 
     // Kategoriye göre ikon/etiket
-    let catBadgeColor = "bg-rose-50 text-rose-700 border-rose-200";
-    if (place.category === 'Cafe') catBadgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-    if (place.category === 'Tatlı') catBadgeColor = "bg-purple-50 text-purple-700 border-purple-200";
-    if (place.category === 'Sokak Lezzeti') catBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
-    if (place.category === 'Meyhane / Bar') catBadgeColor = "bg-indigo-50 text-indigo-700 border-indigo-200";
+    let catBadgeColor = "bg-rose-50 text-rose-700 border-rose-200/80";
+    let catIcon = "🍽️";
+    if (place.category === 'Cafe') { catBadgeColor = "bg-amber-50 text-amber-700 border-amber-200/80"; catIcon = "☕"; }
+    else if (place.category === 'Tatlı') { catBadgeColor = "bg-purple-50 text-purple-700 border-purple-200/80"; catIcon = "🍰"; }
+    else if (place.category === 'Sokak Lezzeti') { catBadgeColor = "bg-orange-50 text-orange-700 border-orange-200/80"; catIcon = "🌯"; }
+    else if (place.category === 'Meyhane / Bar') { catBadgeColor = "bg-indigo-50 text-indigo-700 border-indigo-200/80"; catIcon = "🍸"; }
 
     // Skor rozeti
-    let scoreBadgeColor = "bg-emerald-50 text-emerald-700 border-emerald-300";
-    if (place.score < 7.5) scoreBadgeColor = "bg-rose-50 text-rose-700 border-rose-200";
-    else if (place.score < 9.0) scoreBadgeColor = "bg-amber-50 text-amber-700 border-amber-300";
+    let scoreBadgeColor = "bg-emerald-500 text-white shadow-emerald-500/25";
+    if (place.score < 7.5) scoreBadgeColor = "bg-rose-500 text-white shadow-rose-500/25";
+    else if (place.score < 9.0) scoreBadgeColor = "bg-amber-500 text-white shadow-amber-500/25";
+
+    // Google Maps Yol Tarifi linki
+    const gmapsUrl = place.lat && place.lng 
+      ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}` 
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
 
     card.innerHTML = `
       <div>
-        <div class="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <div class="flex items-center gap-1.5 flex-wrap mb-1">
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-md border ${catBadgeColor}">${escapeHtml(place.category)}</span>
-              <span class="text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">${escapeHtml(place.district)}</span>
+        <div class="flex items-start justify-between gap-3 mb-2.5">
+          <div class="space-y-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${catBadgeColor} flex items-center gap-1">
+                <span>${catIcon}</span>
+                <span>${escapeHtml(place.category)}</span>
+              </span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600">
+                📍 ${escapeHtml(place.district)}
+              </span>
             </div>
-            <h3 class="text-base font-bold text-slate-900 group-hover:text-rose-600 transition leading-snug">${escapeHtml(place.name)}</h3>
+            <h3 class="text-base font-extrabold text-slate-900 group-hover:text-rose-600 transition leading-snug">${escapeHtml(place.name)}</h3>
           </div>
-          <div class="flex flex-col items-end">
-            <span class="px-2.5 py-1 rounded-xl text-sm font-black border flex items-center gap-1 shadow-sm ${scoreBadgeColor}">
-              ★ ${Number(place.score).toFixed(1)}
-            </span>
+          
+          <div class="flex flex-col items-end shrink-0">
+            <div class="px-2.5 py-1 rounded-xl text-xs font-black shadow-md flex items-center gap-1 ${scoreBadgeColor}">
+              <i data-lucide="star" class="w-3 h-3 fill-white"></i>
+              <span>${Number(place.score).toFixed(1)}</span>
+            </div>
           </div>
         </div>
 
         ${place.favorite ? `
-          <div class="mt-2 text-xs bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
-            <span class="font-bold text-slate-700 block mb-0.5">🌟 Öne Çıkan / Favori:</span>
-            <span class="text-slate-600">${escapeHtml(place.favorite)}</span>
+          <div class="mt-2.5 text-xs bg-gradient-to-r from-slate-50 to-amber-50/40 border border-slate-100 p-2.5 rounded-xl">
+            <div class="flex items-center gap-1 text-[11px] font-bold text-amber-800 mb-0.5">
+              <i data-lucide="sparkles" class="w-3 h-3 text-amber-500"></i>
+              <span>Favori Lezzet:</span>
+            </div>
+            <span class="text-slate-700 font-medium">${escapeHtml(place.favorite)}</span>
           </div>
         ` : ''}
 
         ${place.notes ? `
-          <p class="mt-2 text-xs text-slate-500 italic line-clamp-2">"${escapeHtml(place.notes)}"</p>
+          <p class="mt-2.5 text-xs text-slate-500 italic line-clamp-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+            "${escapeHtml(place.notes)}"
+          </p>
         ` : ''}
       </div>
 
       <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-        <button onclick="window.zoomToPlace('${place.id}')" class="text-slate-600 hover:text-rose-600 font-semibold flex items-center gap-1 transition">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-rose-500"></i>
-          <span>Haritada Göster</span>
-        </button>
         <div class="flex items-center gap-2">
-          <button onclick="window.editPlace('${place.id}')" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="Düzenle">
+          <button onclick="window.zoomToPlace('${place.id}')" class="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 bg-rose-50 hover:bg-rose-100/80 px-2.5 py-1.5 rounded-xl transition">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+            <span>Haritada</span>
+          </button>
+          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1 bg-slate-100 hover:bg-slate-200/70 px-2.5 py-1.5 rounded-xl transition" title="Google Haritalar ile Yol Tarifi Al">
+            <i data-lucide="navigation" class="w-3.5 h-3.5 text-blue-500"></i>
+            <span class="hidden sm:inline">Git</span>
+          </a>
+        </div>
+        
+        <div class="flex items-center gap-1">
+          <button onclick="window.editPlace('${place.id}')" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition" title="Düzenle">
             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
           </button>
-          <button onclick="window.deletePlace('${place.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Sil">
+          <button onclick="window.deletePlace('${place.id}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition" title="Sil">
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
@@ -508,26 +541,33 @@ function renderRouteResult(district, route) {
     const step = document.createElement("div");
     step.className = "relative pl-10 group";
 
+    const gmapsUrl = place.lat && place.lng 
+      ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}` 
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
+
     step.innerHTML = `
-      <div class="absolute left-3 -translate-x-1/2 w-6 h-6 rounded-full bg-rose-500 text-white font-bold text-xs flex items-center justify-center ring-4 ring-white shadow">
+      <div class="absolute left-3 -translate-x-1/2 w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-extrabold text-xs flex items-center justify-center ring-4 ring-white shadow-md">
         ${index + 1}
       </div>
-      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:border-rose-300 transition">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-bold text-rose-600">${item.role}</span>
-          <span class="text-xs font-extrabold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">★ ${place.score}/10</span>
+      <div class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100">${item.role}</span>
+          <span class="text-xs font-black bg-amber-500 text-white px-2.5 py-0.5 rounded-xl shadow-xs">★ ${place.score}</span>
         </div>
-        <h4 class="text-base font-bold text-slate-900">${escapeHtml(place.name)}</h4>
-        <p class="text-xs text-slate-500 mb-2">${escapeHtml(place.category)} • ${escapeHtml(place.district)}</p>
+        <h4 class="text-base font-extrabold text-slate-900">${escapeHtml(place.name)}</h4>
+        <p class="text-xs text-slate-500 mb-2">🏷️ ${escapeHtml(place.category)} • 📍 ${escapeHtml(place.district)}</p>
         ${place.favorite ? `
-          <div class="text-xs bg-slate-50 p-2 rounded-lg text-slate-700 mb-2">
-            <span class="font-semibold text-rose-600">Öneri:</span> ${escapeHtml(place.favorite)}
+          <div class="text-xs bg-slate-50 p-2.5 rounded-xl text-slate-700 mb-2 border border-slate-100">
+            <span class="font-bold text-amber-700">🌟 Ne Yenmeli:</span> ${escapeHtml(place.favorite)}
           </div>
         ` : ''}
-        ${place.notes ? `<p class="text-xs text-slate-500 italic">"${escapeHtml(place.notes)}"</p>` : ''}
-        <div class="mt-2 pt-2 border-t border-slate-100 flex justify-end">
-          <button onclick="window.zoomToPlace('${place.id}')" class="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1">
-            <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Haritada Odaklan
+        ${place.notes ? `<p class="text-xs text-slate-500 italic mb-2">"${escapeHtml(place.notes)}"</p>` : ''}
+        <div class="mt-2 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 bg-slate-100 px-2.5 py-1.5 rounded-xl transition">
+            <i data-lucide="navigation" class="w-3.5 h-3.5 text-blue-500"></i> Yol Tarifi
+          </a>
+          <button onclick="window.zoomToPlace('${place.id}')" class="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 bg-rose-50 px-2.5 py-1.5 rounded-xl transition">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Haritada Gör
           </button>
         </div>
       </div>
@@ -618,36 +658,128 @@ window.editPlace = function(id) {
 
 function switchTab(tab) {
   currentTab = tab;
+  
+  // Elementler
   const tabPlacesBtn = document.getElementById("tabPlaces");
   const tabRouteBtn = document.getElementById("tabRoute");
   const viewPlaces = document.getElementById("viewPlaces");
   const viewRoute = document.getElementById("viewRoute");
+  const leftCol = document.getElementById("leftColumnContainer");
+  const rightCol = document.getElementById("rightMapContainer");
+
+  // Mobil Segment Butonları
+  const mTabPlaces = document.getElementById("mobileTabPlaces");
+  const mTabMap = document.getElementById("mobileTabMap");
+  const mTabRoute = document.getElementById("mobileTabRoute");
+
+  // Alt Bar Butonları
+  const bNavPlaces = document.getElementById("bottomNavPlaces");
+  const bNavRoute = document.getElementById("bottomNavRoute");
+
+  const resetMobileSegmentClasses = () => {
+    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
+    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
+    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
+    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
+    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-slate-400 font-semibold text-[10px]";
+  };
+
+  resetMobileSegmentClasses();
 
   if (tab === 'places') {
-    tabPlacesBtn.className = "px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
-    tabRouteBtn.className = "px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
+    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+    
     viewPlaces.classList.remove("hidden");
     viewRoute.classList.add("hidden");
+
+    // Mobilde sol kolonu göster, haritayı mobilde gizle (desktopta hep açık)
+    if (leftCol) leftCol.classList.remove("hidden");
+    if (rightCol) {
+      if (window.innerWidth < 1024) rightCol.classList.add("hidden");
+      else rightCol.classList.remove("hidden");
+    }
+
+    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-lg transition text-slate-900 bg-white shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-rose-500 font-bold text-[10px]";
+
     if (routePolyline) {
       map.removeLayer(routePolyline);
       routePolyline = null;
     }
     updateMapMarkers(getFilteredPlaces());
     document.getElementById("activeMapFilterNote").innerText = "Tüm Mekanlar";
-  } else {
-    tabRouteBtn.className = "px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
-    tabPlacesBtn.className = "px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+  } else if (tab === 'map') {
+    // Sadece mobilde tam ekran harita görünümü
+    if (leftCol && window.innerWidth < 1024) leftCol.classList.add("hidden");
+    if (rightCol) rightCol.classList.remove("hidden");
+
+    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition text-blue-600 bg-white shadow-sm flex items-center justify-center gap-1.5";
+
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 150);
+  } else if (tab === 'route') {
+    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-2";
+    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2";
+    
     viewRoute.classList.remove("hidden");
     viewPlaces.classList.add("hidden");
+
+    if (leftCol) leftCol.classList.remove("hidden");
+    if (rightCol) {
+      if (window.innerWidth < 1024) rightCol.classList.add("hidden");
+      else rightCol.classList.remove("hidden");
+    }
+
+    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition text-amber-700 bg-white shadow-sm flex items-center justify-center gap-1.5";
+    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-amber-500 font-bold text-[10px]";
   }
 }
 
 // Event Listeners
 function setupEventListeners() {
-  document.getElementById("tabPlaces").addEventListener("click", () => switchTab('places'));
-  document.getElementById("tabRoute").addEventListener("click", () => switchTab('route'));
+  // Masaüstü Sekmeler
+  const tabPlaces = document.getElementById("tabPlaces");
+  if (tabPlaces) tabPlaces.addEventListener("click", () => switchTab('places'));
+  const tabRoute = document.getElementById("tabRoute");
+  if (tabRoute) tabRoute.addEventListener("click", () => switchTab('route'));
 
-  document.getElementById("searchInput").addEventListener("input", renderPlaces);
+  // Mobil Segment Butonları
+  const mTabPlaces = document.getElementById("mobileTabPlaces");
+  if (mTabPlaces) mTabPlaces.addEventListener("click", () => switchTab('places'));
+  const mTabMap = document.getElementById("mobileTabMap");
+  if (mTabMap) mTabMap.addEventListener("click", () => switchTab('map'));
+  const mTabRoute = document.getElementById("mobileTabRoute");
+  if (mTabRoute) mTabRoute.addEventListener("click", () => switchTab('route'));
+
+  // Mobil Alt Bar Butonları
+  const bNavPlaces = document.getElementById("bottomNavPlaces");
+  if (bNavPlaces) bNavPlaces.addEventListener("click", () => switchTab('places'));
+  const bNavAdd = document.getElementById("bottomNavAdd");
+  if (bNavAdd) bNavAdd.addEventListener("click", () => {
+    document.getElementById("openNewPlaceModal").click();
+  });
+  const bNavRoute = document.getElementById("bottomNavRoute");
+  if (bNavRoute) bNavRoute.addEventListener("click", () => switchTab('route'));
+
+  // Arama Temizle Butonu
+  const clearPlacesBtn = document.getElementById("clearPlacesSearchBtn");
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput && clearPlacesBtn) {
+    searchInput.addEventListener("input", (e) => {
+      if (e.target.value.length > 0) clearPlacesBtn.classList.remove("hidden");
+      else clearPlacesBtn.classList.add("hidden");
+      renderPlaces();
+    });
+    clearPlacesBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearPlacesBtn.classList.add("hidden");
+      renderPlaces();
+      searchInput.focus();
+    });
+  }
+
   document.getElementById("districtFilter").addEventListener("change", renderPlaces);
   document.getElementById("categoryFilter").addEventListener("change", renderPlaces);
   document.getElementById("sortFilter").addEventListener("change", renderPlaces);
