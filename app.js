@@ -1363,13 +1363,21 @@ function escapeHtml(str) {
 // -------------------------------------------------------------
 // GOOGLE MAPS API, CANLI ARAMA & HARİTADAN KONUM SEÇME MOTORU
 // -------------------------------------------------------------
+const BUILTIN_GOOGLE_API_KEY = "AIzaSyA1cqQ_QOf_8s6e5Z2jS5HG8l--gQMBBF0";
+
+function getGoogleApiKey() {
+  const custom = localStorage.getItem("google_maps_api_key");
+  if (custom && custom.trim().length > 0) return custom.trim();
+  return BUILTIN_GOOGLE_API_KEY;
+}
+
 let searchDebounceTimeout = null;
 
 // Google Maps API Başlatıcı & Durum Kontrolü
 function initGooglePlacesApi() {
-  const key = localStorage.getItem("google_maps_api_key");
+  const key = getGoogleApiKey();
   if (key) {
-    loadGooglePlacesScript(key);
+    updateGoogleApiStatusBadge(true);
   } else {
     updateGoogleApiStatusBadge(false);
   }
@@ -1389,40 +1397,16 @@ function updateGoogleApiStatusBadge(isActive) {
   }
 }
 
-function loadGooglePlacesScript(key) {
-  if (window.google && window.google.maps && window.google.maps.places) {
-    updateGoogleApiStatusBadge(true);
-    return;
-  }
-  const existing = document.getElementById("googlePlacesScript");
-  if (existing) existing.remove();
-
-  const script = document.createElement("script");
-  script.id = "googlePlacesScript";
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=tr&region=TR`;
-  script.async = true;
-  script.defer = true;
-  script.onload = () => {
-    updateGoogleApiStatusBadge(true);
-    showToast("Google Maps Places API aktif edildi! 🚀");
-  };
-  script.onerror = () => {
-    updateGoogleApiStatusBadge(false);
-    console.warn("Google Maps API anahtarı yüklenemedi.");
-  };
-  document.head.appendChild(script);
-}
-
 // Google API Modal Fonksiyonları
 window.openGoogleApiModal = function() {
   const modal = document.getElementById("googleApiModal");
   const input = document.getElementById("googleApiKeyInput");
   const removeBtn = document.getElementById("removeGoogleApiKeyBtn");
-  const key = localStorage.getItem("google_maps_api_key") || "";
+  const key = localStorage.getItem("google_maps_api_key") || BUILTIN_GOOGLE_API_KEY;
 
   if (input) input.value = key;
   if (removeBtn) {
-    if (key) removeBtn.classList.remove("hidden");
+    if (localStorage.getItem("google_maps_api_key")) removeBtn.classList.remove("hidden");
     else removeBtn.classList.add("hidden");
   }
   if (modal) modal.classList.remove("hidden");
@@ -1438,13 +1422,12 @@ window.saveGoogleApiKey = function() {
   const key = (input ? input.value : "").trim();
   if (key) {
     localStorage.setItem("google_maps_api_key", key);
-    loadGooglePlacesScript(key);
     updateGoogleApiStatusBadge(true);
-    showToast("Google Maps API kaydedildi! Canlı arama hazır. 🚀");
+    showToast("Google Maps API güncellendi! Canlı arama hazır. 🚀");
   } else {
     localStorage.removeItem("google_maps_api_key");
-    updateGoogleApiStatusBadge(false);
-    showToast("API anahtarı temizlendi.");
+    updateGoogleApiStatusBadge(Boolean(BUILTIN_GOOGLE_API_KEY));
+    showToast("Özel API anahtarı temizlendi, varsayılan anahtar devrede.");
   }
   window.closeGoogleApiModal();
 };
@@ -1452,10 +1435,10 @@ window.saveGoogleApiKey = function() {
 window.removeGoogleApiKey = function() {
   localStorage.removeItem("google_maps_api_key");
   const input = document.getElementById("googleApiKeyInput");
-  if (input) input.value = "";
-  updateGoogleApiStatusBadge(false);
+  if (input) input.value = BUILTIN_GOOGLE_API_KEY;
+  updateGoogleApiStatusBadge(Boolean(BUILTIN_GOOGLE_API_KEY));
   window.closeGoogleApiModal();
-  showToast("Google API anahtarı kaldırıldı.");
+  showToast("Özel anahtar kaldırıldı, sistem anahtarı devrede.");
 };
 
 // Haritadan Tıkla & Konum Seç
@@ -1585,7 +1568,7 @@ function setupQuickSearch() {
 }
 
 // Google Maps URL ve Kopyalanmış Metin Çözücü
-function handleGoogleMapsLink(inputStr) {
+async function handleGoogleMapsLink(inputStr) {
   const spinner = document.getElementById("searchSpinner");
   if (spinner) spinner.classList.remove("hidden");
 
@@ -1593,11 +1576,38 @@ function handleGoogleMapsLink(inputStr) {
     let placeName = "";
     let lat = null;
     let lng = null;
+    const apiKey = getGoogleApiKey();
 
-    // 1. Standart URL formatı: /place/Mekan+Adı/@40.98,29.02
+    // 0. maps.app.goo.gl veya goo.gl/maps kısa link çözücü
+    if (inputStr.includes("maps.app.goo.gl") || inputStr.includes("goo.gl/maps")) {
+      const urlMatch = inputStr.match(/https?:\/\/[^\s]+/);
+      const shortUrl = urlMatch ? urlMatch[0] : inputStr.trim();
+      
+      try {
+        const unshortenRes = await fetch(`https://unshorten.me/json/${encodeURIComponent(shortUrl)}`);
+        const unshortenData = await unshortenRes.json();
+        if (unshortenData && unshortenData.resolved_url) {
+          inputStr = unshortenData.resolved_url;
+        }
+      } catch (err) {
+        console.warn("Kısa link unshorten hatası:", err);
+      }
+    }
+
+    // 1. Standart URL formatı: /place/Mekan+Adı/@40.98,29.02 veya ?q=Mekan+Adı
     const placeMatch = inputStr.match(/\/place\/([^\/@?]+)/);
     if (placeMatch && placeMatch[1]) {
       placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
+    }
+
+    if (!placeName) {
+      const qMatch = inputStr.match(/[?&]q=([^&]+)/);
+      if (qMatch && qMatch[1]) {
+        const decodedQ = decodeURIComponent(qMatch[1].replace(/\+/g, " "));
+        if (!decodedQ.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+          placeName = decodedQ;
+        }
+      }
     }
 
     // Koordinat bulma: @40.9860,29.0260 veya ?q=40.9860,29.0260
@@ -1615,12 +1625,43 @@ function handleGoogleMapsLink(inputStr) {
       }
     }
 
+    // 3. Eğer isim var ama koordinat yoksa Google Places API (New) ile konum bul
+    if (placeName && (!lat || !lng) && apiKey) {
+      try {
+        const searchRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.rating"
+          },
+          body: JSON.stringify({
+            textQuery: placeName + " İstanbul",
+            languageCode: "tr"
+          })
+        });
+        const searchData = await searchRes.json();
+        if (searchData.places && searchData.places.length > 0) {
+          const first = searchData.places[0];
+          if (first.displayName && first.displayName.text) {
+            placeName = first.displayName.text;
+          }
+          if (first.location) {
+            lat = first.location.latitude;
+            lng = first.location.longitude;
+          }
+        }
+      } catch (err) {
+        console.warn("Places text search hatası:", err);
+      }
+    }
+
     if (placeName) {
       document.getElementById("modalPlaceName").value = placeName;
       autoDetectCategoryAndDistrict(placeName, lat, lng);
-      showToast(`"${placeName}" Google Maps'ten okundu! ✨`);
+      showToast(`"${placeName}" Google Maps'ten başarıyla aktarıldı! ✨`);
     } else {
-      showToast("Link tespit edildi, detaylar form alanına aktarılıyor...", "info");
+      showToast("Link tespit edildi, detaylar arama çubuğuna aktarılıyor...", "info");
     }
 
     if (lat && lng) {
@@ -1645,52 +1686,57 @@ window.applyDirectPlaceName = function(name) {
   if (distInput) distInput.focus();
 };
 
-// Google Maps Tarzı Canlı Arama Motoru (Hibrit: Google Places API + Photon POI + Akıllı Kartlar)
+// Google Maps Tarzı Canlı Arama Motoru (Hibrit: Google Places API (New) + Photon POI + Akıllı Kartlar)
 async function fetchPlaceSuggestions(query) {
   const dropdown = document.getElementById("searchResultsDropdown");
   const spinner = document.getElementById("searchSpinner");
+  const apiKey = getGoogleApiKey();
 
   let results = [];
 
-  // A. Eğer Google Places API aktifse resmi Google veritabanından çek!
-  if (window.google && window.google.maps && window.google.maps.places) {
+  // A. Google Places API (New) - Canlı ve Otomatik Autocomplete
+  if (apiKey) {
     try {
-      const service = new google.maps.places.AutocompleteService();
-      const predictions = await new Promise((resolve) => {
-        service.getPlacePredictions({
+      const gRes = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey
+        },
+        body: JSON.stringify({
           input: query,
-          componentRestrictions: { country: 'tr' },
+          languageCode: "tr",
+          regionCode: "tr",
           locationBias: {
-            north: 41.6,
-            south: 40.7,
-            east: 29.9,
-            west: 28.0
+            rectangle: {
+              low: { latitude: 40.7, longitude: 28.0 },
+              high: { latitude: 41.6, longitude: 29.9 }
+            }
           }
-        }, (res, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && res) {
-            resolve(res);
-          } else {
-            resolve([]);
-          }
-        });
+        })
       });
-
-      if (predictions && predictions.length > 0) {
-        results = predictions.map(p => ({
-          name: p.structured_formatting ? p.structured_formatting.main_text : p.description.split(",")[0],
-          district: p.structured_formatting ? p.structured_formatting.secondary_text : p.description,
-          subtitle: p.description,
-          category: "Google Maps Mekanı",
-          placeId: p.place_id,
-          isGoogle: true
-        }));
+      const gData = await gRes.json();
+      if (gData.suggestions && gData.suggestions.length > 0) {
+        results = gData.suggestions
+          .filter(s => s.placePrediction)
+          .map(s => {
+            const pred = s.placePrediction;
+            return {
+              name: pred.structuredFormat ? pred.structuredFormat.mainText.text : pred.text.text,
+              district: pred.structuredFormat && pred.structuredFormat.secondaryText ? pred.structuredFormat.secondaryText.text : "",
+              subtitle: pred.text ? pred.text.text : "",
+              category: "Google Maps Mekanı",
+              placeId: pred.placeId,
+              isGoogle: true
+            };
+          });
       }
     } catch (e) {
-      console.warn("Google Places prediction error:", e);
+      console.warn("Google Places New autocomplete error:", e);
     }
   }
 
-  // B. Photon İstanbul API (POIs odaklı filtreleme)
+  // B. Photon İstanbul API (POIs odaklı fallback filtreleme)
   if (results.length === 0) {
     try {
       const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=28.0,40.7,29.9,41.6&limit=12`;
@@ -1838,13 +1884,39 @@ async function fetchPlaceSuggestions(query) {
 }
 
 // Seçilen mekanı form alanlarına doldur
-function applySelectedPlace(info) {
+async function applySelectedPlace(info) {
   document.getElementById("modalPlaceName").value = info.name;
   
-  if (info.lat && info.lng) {
-    document.getElementById("modalPlaceLat").value = Number(info.lat).toFixed(5);
-    document.getElementById("modalPlaceLng").value = Number(info.lng).toFixed(5);
-    autoDetectCategoryAndDistrict(info.name, info.lat, info.lng);
+  let lat = info.lat;
+  let lng = info.lng;
+  const apiKey = getGoogleApiKey();
+
+  // Eğer Google Places ID varsa resmi koordinatları ve adresi çek
+  if (info.placeId && (!lat || !lng) && apiKey) {
+    try {
+      const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(info.placeId)}`, {
+        headers: {
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "displayName,formattedAddress,location"
+        }
+      });
+      const data = await res.json();
+      if (data && data.location) {
+        lat = data.location.latitude;
+        lng = data.location.longitude;
+      }
+      if (data && data.displayName && data.displayName.text) {
+        document.getElementById("modalPlaceName").value = data.displayName.text;
+      }
+    } catch (err) {
+      console.warn("Place details getirme hatası:", err);
+    }
+  }
+
+  if (lat && lng) {
+    document.getElementById("modalPlaceLat").value = Number(lat).toFixed(5);
+    document.getElementById("modalPlaceLng").value = Number(lng).toFixed(5);
+    autoDetectCategoryAndDistrict(info.name, lat, lng);
   } else {
     autoDetectCategoryAndDistrict(info.name);
   }
