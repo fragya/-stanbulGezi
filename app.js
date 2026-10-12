@@ -22,6 +22,7 @@ const DEFAULT_PLACES = [
     district: "Kadıköy",
     category: "Yemek",
     score: 9.5,
+    addedBy: "Fırat",
     favorite: "Perde Pilavı, Kebaplar, Yöresel Ot Yemekleri",
     notes: "Anadolu mutfağının zirvesi. Rezervasyonsuz giderseniz biraz bekleyebilirsiniz ama değer.",
     lat: 40.9898,
@@ -34,6 +35,7 @@ const DEFAULT_PLACES = [
     district: "Kadıköy",
     category: "Cafe",
     score: 9.0,
+    addedBy: "Zeliha",
     favorite: "Filter Coffee (Etiyopya) & Flat White",
     notes: "Terasından Kadıköy çarşısını izleyip nitelikli kahve yudumlamak için ideal.",
     lat: 40.9912,
@@ -46,6 +48,7 @@ const DEFAULT_PLACES = [
     district: "Moda",
     category: "Tatlı",
     score: 9.2,
+    addedBy: "Zeliha",
     favorite: "Sıcak Çikolatalı Çilekli Kup",
     notes: "Akşamları önünde kuyruk olur, Moda sahil yürüyüşü öncesi harika durak.",
     lat: 40.9845,
@@ -58,6 +61,7 @@ const DEFAULT_PLACES = [
     district: "Moda",
     category: "Sokak Lezzeti",
     score: 9.4,
+    addedBy: "Fırat",
     favorite: "Kuzu Dürüm & Sütlaç",
     notes: "Şef dokunuşlu gurme dürümler, hızlı ve inanılmaz lezzetli.",
     lat: 40.9860,
@@ -70,6 +74,7 @@ const DEFAULT_PLACES = [
     district: "Karaköy",
     category: "Cafe",
     score: 8.8,
+    addedBy: "Zeliha",
     favorite: "Cortado & Cheesecake",
     notes: "Karaköy'ün nostaljik sokak atmosferini yaşatan en ikonik kahvecilerden.",
     lat: 41.0250,
@@ -82,6 +87,7 @@ const DEFAULT_PLACES = [
     district: "Karaköy",
     category: "Tatlı",
     score: 9.7,
+    addedBy: "Fırat",
     favorite: "Fıstıklı Nadir Dolama & Havuç Dilimi",
     notes: "Taze ve sıcak servis. Yanına kaymak ve süt veya çay vazgeçilmez.",
     lat: 41.0238,
@@ -94,6 +100,7 @@ const DEFAULT_PLACES = [
     district: "Beşiktaş",
     category: "Yemek",
     score: 9.3,
+    addedBy: "Fırat",
     favorite: "Double Cheese & Trüflü Patates",
     notes: "İstanbul'un en iyi gurme burgercilerinden biri. Sosları efsane.",
     lat: 41.0440,
@@ -106,6 +113,7 @@ const DEFAULT_PLACES = [
     district: "Beyoğlu",
     category: "Gezilecek Yer",
     score: 9.6,
+    addedBy: "Zeliha",
     favorite: "Tarihi Kule Manzarası & Galata Sokakları Yürüyüşü",
     notes: "Gün batımında tarihi yarımada ve Boğaz manzarası büyüleyici.",
     lat: 41.0256,
@@ -118,6 +126,7 @@ const DEFAULT_PLACES = [
     district: "Moda",
     category: "Gezilecek Yer",
     score: 9.5,
+    addedBy: "Zeliha",
     favorite: "Sahil Yürüyüşü, Çimlerde Oturma, Tarihi İskele",
     notes: "Kadıköy turunun vazgeçilmez açık hava ve dinlenme noktası.",
     lat: 40.9790,
@@ -129,9 +138,117 @@ const DEFAULT_PLACES = [
 // Uygulama Durumu (State)
 let places = [];
 let map = null;
+let currentTileLayer = null;
+let currentMapStyle = "voyager";
 let markersLayer = null;
 let routePolyline = null;
 let currentTab = 'places'; // 'places' veya 'route'
+
+// Harita Katman Stilleri (Retina Modern, Google Sokak, Google Uydu, Gece Haritası)
+const MAP_TILE_STYLES = {
+  voyager: {
+    name: "Modern Harita",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap &bull; CARTO",
+    maxZoom: 20
+  },
+  google: {
+    name: "Google Sokak Haritası",
+    url: "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=tr",
+    attribution: "&copy; Google Haritalar",
+    maxZoom: 20
+  },
+  satellite: {
+    name: "Google Uydu & Sokak",
+    url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&hl=tr",
+    attribution: "&copy; Google Uydu",
+    maxZoom: 20
+  },
+  dark: {
+    name: "Karanlık Harita",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap &bull; CARTO",
+    maxZoom: 20
+  }
+};
+
+// Kullanıcı Rozeti Oluşturucu (Fırat & Zeliha)
+function getUserBadgeHtml(addedBy, compact = false) {
+  const user = addedBy === "Zeliha" ? "Zeliha" : "Fırat";
+  if (user === "Zeliha") {
+    if (compact) {
+      return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"><span class="w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">Z</span><span>Zeliha</span></span>`;
+    }
+    return `
+      <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/70 flex items-center gap-1">
+        <span class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">Z</span>
+        <span>Zeliha</span>
+      </span>
+    `;
+  }
+  if (compact) {
+    return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"><span class="w-3.5 h-3.5 rounded-full bg-sky-600 text-white text-[9px] font-black flex items-center justify-center">F</span><span>Fırat</span></span>`;
+  }
+  return `
+    <span class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/70 flex items-center gap-1">
+      <span class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">F</span>
+      <span>Fırat</span>
+    </span>
+  `;
+}
+
+// Modal İçinde Kullanıcı Seçimi (Fırat / Zeliha)
+window.selectPlaceUser = function(userName) {
+  const user = userName === "Zeliha" ? "Zeliha" : "Fırat";
+  const input = document.getElementById("modalPlaceUser");
+  if (input) input.value = user;
+  localStorage.setItem("gezi_last_user", user);
+
+  const firatBtn = document.getElementById("selectUserFiratBtn");
+  const zelihaBtn = document.getElementById("selectUserZelihaBtn");
+  const checkFirat = document.getElementById("checkUserFirat");
+  const checkZeliha = document.getElementById("checkUserZeliha");
+
+  if (firatBtn && zelihaBtn && checkFirat && checkZeliha) {
+    if (user === "Fırat") {
+      firatBtn.className = "p-2.5 rounded-2xl border-2 border-sky-500 bg-sky-500/10 flex items-center justify-between transition group cursor-pointer shadow-sm";
+      checkFirat.className = "w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-xs font-bold shadow-xs";
+      zelihaBtn.className = "p-2.5 rounded-2xl border-2 theme-border theme-bg-surface hover:border-rose-400 flex items-center justify-between transition group cursor-pointer opacity-75 hover:opacity-100";
+      checkZeliha.className = "w-5 h-5 rounded-full border theme-border text-transparent flex items-center justify-center text-xs font-bold";
+    } else {
+      zelihaBtn.className = "p-2.5 rounded-2xl border-2 border-rose-500 bg-rose-500/10 flex items-center justify-between transition group cursor-pointer shadow-sm";
+      checkZeliha.className = "w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-bold shadow-xs";
+      firatBtn.className = "p-2.5 rounded-2xl border-2 theme-border theme-bg-surface hover:border-sky-400 flex items-center justify-between transition group cursor-pointer opacity-75 hover:opacity-100";
+      checkFirat.className = "w-5 h-5 rounded-full border theme-border text-transparent flex items-center justify-center text-xs font-bold";
+    }
+  }
+};
+
+// Kullanıcıya Göre Hızlı Filtreleme (Tümü / Fırat / Zeliha)
+window.setUserFilter = function(userVal) {
+  const input = document.getElementById("userFilter");
+  if (input) input.value = userVal;
+
+  const pillAll = document.getElementById("userPillAll");
+  const pillFirat = document.getElementById("userPillFirat");
+  const pillZeliha = document.getElementById("userPillZeliha");
+
+  const activeClass = "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-extrabold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
+  const inactiveClass = "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5";
+
+  if (pillAll) pillAll.className = userVal === "all" ? activeClass : inactiveClass;
+  if (pillFirat) pillFirat.className = userVal === "Fırat" ? activeClass : inactiveClass;
+  if (pillZeliha) pillZeliha.className = userVal === "Zeliha" ? activeClass : inactiveClass;
+
+  const note = document.getElementById("activeMapFilterNote");
+  if (note) {
+    if (userVal === "Fırat") note.innerText = "Fırat'ın Eklediği Mekanlar";
+    else if (userVal === "Zeliha") note.innerText = "Zeliha'nın Eklediği Mekanlar";
+    else note.innerText = "Tüm Mekanlar";
+  }
+
+  renderPlaces();
+};
 
 // Başlatma
 document.addEventListener("DOMContentLoaded", () => {
@@ -257,6 +374,16 @@ window.setAppTheme = function(themeName, notify = true) {
   const dropdown = document.getElementById("themeDropdown");
   if (dropdown) dropdown.classList.add("hidden");
 
+  // Harita stilini gece/gündüz temasıyla uyumlu güncelle
+  if (map && currentMapStyle !== "satellite") {
+    if (themeName === "dark" && currentMapStyle !== "dark") {
+      window.setMapTileStyle("dark", false);
+    } else if (themeName !== "dark" && currentMapStyle === "dark") {
+      const savedMapStyle = localStorage.getItem("gezi_map_style") || "voyager";
+      window.setMapTileStyle(savedMapStyle === "dark" ? "voyager" : savedMapStyle, false);
+    }
+  }
+
   initIcons();
 
   if (map) {
@@ -273,7 +400,14 @@ function loadPlaces() {
   const saved = localStorage.getItem("istanbul_gezi_places");
   if (saved) {
     try {
-      places = JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      // Eksik addedBy alanlarını varsayılanlarla tamamla
+      const defaultUserMap = {};
+      DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
+      places = parsed.map(p => ({
+        ...p,
+        addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
+      }));
     } catch (e) {
       places = [...DEFAULT_PLACES];
     }
@@ -301,11 +435,12 @@ function initMap() {
     zoomControl: true
   });
 
-  // Esri World Street Map (Sıfır API anahtarı, hiçbir engel/filtre yok, file:/// uyumlu ve detaylı Türkiye/İstanbul haritası)
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-    attribution: 'Tiles &copy; Esri &mdash; Kaynak: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012',
-    maxZoom: 19
-  }).addTo(map);
+  // Başlangıç harita katmanı (Karanlık moddaysa dark, değilse kaydedilen stil veya voyager)
+  const activeTheme = localStorage.getItem("gezi_theme") || "emerald";
+  const savedStyle = localStorage.getItem("gezi_map_style") || "voyager";
+  const initialStyle = activeTheme === "dark" && savedStyle !== "satellite" ? "dark" : savedStyle;
+
+  window.setMapTileStyle(initialStyle, false);
 
   markersLayer = L.layerGroup().addTo(map);
 
@@ -321,7 +456,67 @@ function initMap() {
   updateMapMarkers(places);
 }
 
-// Harita Pinleri Güncelleme
+// Harita Katman Stili Değiştirici (Modern / Sokak / Uydu / Karanlık)
+window.setMapTileStyle = function(styleKey, notify = true) {
+  if (!MAP_TILE_STYLES[styleKey]) styleKey = "voyager";
+  currentMapStyle = styleKey;
+  if (styleKey !== "dark") {
+    localStorage.setItem("gezi_map_style", styleKey);
+  }
+
+  if (map) {
+    if (currentTileLayer) {
+      map.removeLayer(currentTileLayer);
+    }
+    const cfg = MAP_TILE_STYLES[styleKey];
+    currentTileLayer = L.tileLayer(cfg.url, {
+      attribution: cfg.attribution,
+      maxZoom: cfg.maxZoom
+    }).addTo(map);
+  }
+
+  // Buton aktiflik görünümlerini güncelle
+  const btnIds = {
+    voyager: "mapStyleVoyager",
+    google: "mapStyleGoogle",
+    satellite: "mapStyleSatellite",
+    dark: "mapStyleDark"
+  };
+
+  Object.entries(btnIds).forEach(([key, id]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (key === styleKey) {
+      btn.className = "px-2.5 py-1 rounded-lg transition bg-emerald-600 text-white shadow-xs flex items-center gap-1";
+    } else {
+      btn.className = "px-2.5 py-1 rounded-lg transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1";
+    }
+  });
+
+  if (notify) {
+    showToast(`${MAP_TILE_STYLES[styleKey].name} görünümü aktif! 🗺️`);
+  }
+};
+
+// Haritayı Tam Ekran Yap / Küçült
+window.toggleMapFullscreen = function() {
+  const wrapper = document.getElementById("mapCardWrapper");
+  const btn = document.getElementById("fullscreenMapBtn");
+  if (!wrapper) return;
+
+  const isFull = wrapper.classList.toggle("map-fullscreen-active");
+  if (btn) {
+    btn.innerHTML = isFull
+      ? `<i data-lucide="minimize-2" class="w-3.5 h-3.5 text-emerald-600"></i>`
+      : `<i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>`;
+  }
+  initIcons();
+  setTimeout(() => {
+    if (map) map.invalidateSize();
+  }, 200);
+};
+
+// Harita Pinleri Güncelleme (Modern Kapsül Pinler + Kullanıcı Rozeti)
 function updateMapMarkers(placesToShow) {
   if (!markersLayer) return;
   markersLayer.clearLayers();
@@ -336,39 +531,63 @@ function updateMapMarkers(placesToShow) {
     const latlng = [place.lat, place.lng];
     latlngs.push(latlng);
 
-    // Mavi & Yeşil Paleti: 9.0+ Zümrüt Yeşili, 7.5-8.9 Okyanus Mavisi, altı Gül Pembesi
-    let colorClass = "bg-rose-500 shadow-rose-500/30";
-    if (place.score >= 9.0) colorClass = "bg-emerald-600 shadow-emerald-500/30";
-    else if (place.score >= 7.5) colorClass = "bg-sky-600 shadow-sky-500/30";
+    // Kategori ikonu
+    let catIcon = "🍽️";
+    if (place.category === 'Gezilecek Yer') catIcon = "🏛️";
+    else if (place.category === 'Cafe') catIcon = "☕";
+    else if (place.category === 'Tatlı') catIcon = "🍰";
+    else if (place.category === 'Sokak Lezzeti') catIcon = "🌯";
+    else if (place.category === 'Meyhane / Bar') catIcon = "🍸";
+
+    // Puan rengi
+    let bgGradient = "linear-gradient(135deg, #059669 0%, #0d9488 100%)";
+    if (place.score < 7.5) bgGradient = "linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)";
+    else if (place.score < 9.0) bgGradient = "linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)";
+
+    // Kullanıcı baş harfi rozeti (F / Z)
+    const userInitial = place.addedBy === "Zeliha" ? "Z" : "F";
+    const userDotColor = place.addedBy === "Zeliha" ? "#f43f5e" : "#0284c7";
 
     const customIcon = L.divIcon({
       className: "custom-div-icon",
       html: `
-        <div class="${colorClass} text-white font-bold text-xs rounded-full w-8 h-8 flex items-center justify-center border-2 border-white shadow-lg cursor-pointer transform hover:scale-110 transition duration-150">
-          ${Number(place.score).toFixed(1)}
+        <div class="map-pin-capsule" style="background: ${bgGradient};">
+          <span style="font-size: 12px; line-height: 1;">${catIcon}</span>
+          <span>${Number(place.score).toFixed(1)}</span>
+          <span style="background: ${userDotColor}; width: 15px; height: 15px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900; border: 1.5px solid #fff; margin-left: 1px;">${userInitial}</span>
         </div>
       `,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16]
+      iconSize: [74, 34],
+      iconAnchor: [37, 34],
+      popupAnchor: [0, -34]
     });
 
     const marker = L.marker(latlng, { icon: customIcon });
 
-    const popupImg = place.image ? `<img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-24 object-cover rounded-xl mb-2" />` : '';
+    const popupImg = place.image ? `<img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-28 object-cover rounded-xl mb-2" />` : '';
+    const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`;
 
     const popupHtml = `
-      <div class="p-2 min-w-[210px] max-w-[240px] theme-bg-card theme-text-main">
+      <div class="p-3 min-w-[225px] max-w-[260px] theme-bg-card theme-text-main">
         ${popupImg}
-        <div class="flex items-center justify-between gap-2 mb-1.5">
-          <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">${escapeHtml(place.district)}</span>
-          <span class="text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-lg border border-sky-200/50">★ ${Number(place.score).toFixed(1)}/10</span>
+        <div class="flex items-center justify-between gap-1.5 mb-1.5 flex-wrap">
+          <div class="flex items-center gap-1">
+            <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">📍 ${escapeHtml(place.district)}</span>
+            ${getUserBadgeHtml(place.addedBy, true)}
+          </div>
+          <span class="text-[11px] font-black text-white bg-emerald-600 px-2 py-0.5 rounded-lg shadow-xs">★ ${Number(place.score).toFixed(1)}</span>
         </div>
-        <h4 class="font-extrabold theme-text-main text-sm mb-0.5">${escapeHtml(place.name)}</h4>
-        <p class="text-xs theme-text-muted mb-2">🏷️ ${escapeHtml(place.category)}</p>
-        ${place.favorite ? `<p class="text-xs theme-text-main theme-bg-surface p-1.5 rounded-xl mb-2 border theme-border font-medium"><strong>Favori:</strong> ${escapeHtml(place.favorite)}</p>` : ''}
-        <button onclick="window.focusPlaceCard('${place.id}')" class="w-full text-center text-xs py-1.5 theme-bg-surface hover:opacity-85 theme-text-main font-bold rounded-xl transition border theme-border">
-          Detayları Gör
-        </button>
+        <h4 class="font-extrabold theme-text-main text-sm mb-0.5 leading-snug">${escapeHtml(place.name)}</h4>
+        <p class="text-[11px] theme-text-muted mb-2">${catIcon} ${escapeHtml(place.category)}</p>
+        ${place.favorite ? `<p class="text-[11px] theme-text-main theme-bg-surface p-2 rounded-xl mb-2.5 border theme-border font-medium"><strong>🌟 Favori:</strong> ${escapeHtml(place.favorite)}</p>` : ''}
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="window.focusPlaceCard('${place.id}')" class="text-center text-[11px] py-1.5 theme-bg-surface hover:opacity-85 theme-text-main font-bold rounded-xl transition border theme-border">
+            Detayları Gör
+          </button>
+          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="text-center text-[11px] py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1" style="color: #fff !important; text-decoration: none;">
+            <span>Yol Tarifi</span>
+          </a>
+        </div>
       </div>
     `;
 
@@ -378,7 +597,7 @@ function updateMapMarkers(placesToShow) {
 
   if (latlngs.length > 0) {
     const bounds = L.latLngBounds(latlngs);
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    map.fitBounds(bounds, { padding: [45, 45], maxZoom: 14 });
   }
 }
 
@@ -389,6 +608,18 @@ function updateStats() {
   
   const mBadge = document.getElementById("mobileCountDisplay");
   if (mBadge) mBadge.innerText = `${places.length} Mekan`;
+
+  const firatCount = places.filter(p => (p.addedBy || "Fırat") === "Fırat").length;
+  const zelihaCount = places.filter(p => p.addedBy === "Zeliha").length;
+
+  const pillFirat = document.getElementById("userPillFirat");
+  if (pillFirat) {
+    pillFirat.innerHTML = `<span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span><span>Fırat (${firatCount})</span>`;
+  }
+  const pillZeliha = document.getElementById("userPillZeliha");
+  if (pillZeliha) {
+    pillZeliha.innerHTML = `<span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span><span>Zeliha (${zelihaCount})</span>`;
+  }
 
   const avgDisplay = document.getElementById("avgScoreDisplay");
   if (avgDisplay) {
@@ -409,18 +640,23 @@ function getFilteredPlaces() {
   const district = document.getElementById("districtFilter").value;
   const category = document.getElementById("categoryFilter").value;
   const sort = document.getElementById("sortFilter").value;
+  const userFilterEl = document.getElementById("userFilter");
+  const userFilter = userFilterEl ? userFilterEl.value : "all";
 
   let filtered = places.filter(p => {
+    const placeUser = p.addedBy === "Zeliha" ? "Zeliha" : "Fırat";
     const matchesSearch = !search || 
       p.name.toLowerCase().includes(search) ||
       (p.favorite && p.favorite.toLowerCase().includes(search)) ||
       (p.notes && p.notes.toLowerCase().includes(search)) ||
-      p.district.toLowerCase().includes(search);
+      p.district.toLowerCase().includes(search) ||
+      placeUser.toLowerCase().includes(search);
       
     const matchesDistrict = (district === 'all') || (p.district.toLowerCase() === district.toLowerCase());
     const matchesCategory = (category === 'all') || (p.category === category);
+    const matchesUser = (userFilter === 'all') || (placeUser === userFilter);
 
-    return matchesSearch && matchesDistrict && matchesCategory;
+    return matchesSearch && matchesDistrict && matchesCategory && matchesUser;
   });
 
   // Sıralama
@@ -504,6 +740,7 @@ function renderPlaces() {
               <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg theme-bg-surface theme-text-muted border theme-border">
                 📍 ${escapeHtml(place.district)}
               </span>
+              ${getUserBadgeHtml(place.addedBy)}
             </div>
             <h3 class="text-base font-extrabold theme-text-main group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition leading-snug">${escapeHtml(place.name)}</h3>
           </div>
@@ -727,9 +964,12 @@ function renderRouteResult(district, route) {
         ${index + 1}
       </div>
       <div class="theme-bg-card rounded-3xl p-4 border theme-border shadow-sm hover:shadow-md transition">
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800">${item.role}</span>
-          <span class="text-xs font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-xl shadow-xs">★ ${place.score}</span>
+        <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="route-step-role text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800">${item.role}</span>
+            ${getUserBadgeHtml(place.addedBy, true)}
+          </div>
+          <span class="route-step-score text-xs font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-xl shadow-xs">★ ${place.score}</span>
         </div>
         <h4 class="text-base font-extrabold theme-text-main">${escapeHtml(place.name)}</h4>
         <p class="text-xs theme-text-muted mb-2">🏷️ ${escapeHtml(place.category)} • 📍 ${escapeHtml(place.district)}</p>
@@ -800,13 +1040,15 @@ function renderCustomPlacesPicker() {
     else if (p.category === 'Cafe') icon = "☕";
     else if (p.category === 'Tatlı') icon = "🍰";
 
+    const addedByUser = p.addedBy === "Zeliha" ? "Zeliha" : "Fırat";
+
     row.innerHTML = `
       <div class="flex items-center gap-2.5 overflow-hidden">
         <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0" />
         <span class="text-sm shrink-0">${icon}</span>
         <div class="truncate">
           <span class="text-xs theme-text-main block truncate">${escapeHtml(p.name)}</span>
-          <span class="text-[10px] theme-text-muted block">${escapeHtml(p.district)} • ★ ${Number(p.score).toFixed(1)}</span>
+          <span class="text-[10px] theme-text-muted block">${escapeHtml(p.district)} • ★ ${Number(p.score).toFixed(1)} • 👤 ${addedByUser}</span>
         </div>
       </div>
       <span class="text-[10px] px-2 py-0.5 rounded-md ${isChecked ? 'bg-emerald-600 text-white' : 'theme-bg-surface theme-text-muted border theme-border'} shrink-0 font-bold">
@@ -920,7 +1162,8 @@ window.editPlace = function(id) {
   if (!p) return;
 
   document.getElementById("placeId").value = p.id;
-  document.getElementById("modalTitle").innerHTML = `<i data-lucide="edit" class="w-5 h-5 text-rose-500"></i><span>Mekanı Düzenle</span>`;
+  document.getElementById("modalTitle").innerHTML = `<i data-lucide="edit" class="w-5 h-5 text-emerald-600"></i><span>Mekanı Düzenle</span>`;
+  window.selectPlaceUser(p.addedBy || "Fırat");
   document.getElementById("modalPlaceName").value = p.name;
   document.getElementById("modalPlaceDistrict").value = p.district;
   document.getElementById("modalPlaceCategory").value = p.category;
@@ -1193,7 +1436,11 @@ function openNewPlaceModalDirect() {
   if (idInput) idInput.value = "";
   
   const title = document.getElementById("modalTitle");
-  if (title) title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-rose-500"></i><span>Yeni Mekan Ekle</span>`;
+  if (title) title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-emerald-600"></i><span>Yeni Mekan Ekle</span>`;
+
+  // Son seçilen kullanıcıyı (Fırat veya Zeliha) yükle
+  const lastUser = localStorage.getItem("gezi_last_user") || "Fırat";
+  window.selectPlaceUser(lastUser);
   
   const displayVal = document.getElementById("ratingDisplayValue");
   if (displayVal) displayVal.innerText = "9.0";
@@ -1231,6 +1478,8 @@ function closeModal() {
 
 function savePlaceFromModal() {
   const id = document.getElementById("placeId").value;
+  const userEl = document.getElementById("modalPlaceUser");
+  const addedBy = userEl && userEl.value === "Zeliha" ? "Zeliha" : "Fırat";
   const name = document.getElementById("modalPlaceName").value.trim();
   const district = document.getElementById("modalPlaceDistrict").value.trim();
   const category = document.getElementById("modalPlaceCategory").value;
@@ -1254,8 +1503,8 @@ function savePlaceFromModal() {
     // Güncelleme
     const index = places.findIndex(p => p.id === id);
     if (index !== -1) {
-      places[index] = { ...places[index], name, district, category, score, favorite, notes, image, lat, lng };
-      showToast("Mekan ve fotoğraf güncellendi. ✅");
+      places[index] = { ...places[index], name, district, category, score, addedBy, favorite, notes, image, lat, lng };
+      showToast(`"${name}" (${addedBy}) güncellendi. ✅`);
     }
   } else {
     // Yeni ekleme
@@ -1265,6 +1514,7 @@ function savePlaceFromModal() {
       district,
       category,
       score,
+      addedBy,
       favorite,
       notes,
       image,
@@ -1273,7 +1523,7 @@ function savePlaceFromModal() {
       createdAt: Date.now()
     };
     places.unshift(newPlace);
-    showToast("Yeni mekan ve fotoğraf kaydedildi! ✨");
+    showToast(`"${name}" ${addedBy} tarafından eklendi! ✨`);
   }
 
   savePlaces();
@@ -1323,14 +1573,18 @@ function copyRouteToClipboard() {
   const steps = document.querySelectorAll("#routeTimeline > div");
   if (!steps.length) return;
 
-  let text = `🗺️ Günün ${district} Gurme Rotası:\n\n`;
+  const titlePrefix = district === "all" ? "İstanbul" : district;
+  let text = `🗺️ Günün ${titlePrefix} Gurme & Gezi Rotası:\n\n`;
   steps.forEach((step, idx) => {
-    const name = step.querySelector("h4").innerText;
-    const role = step.querySelector(".text-rose-600").innerText;
-    const score = step.querySelector(".text-amber-700").innerText;
+    const nameEl = step.querySelector("h4");
+    const roleEl = step.querySelector(".route-step-role");
+    const scoreEl = step.querySelector(".route-step-score");
+    const name = nameEl ? nameEl.innerText : "";
+    const role = roleEl ? roleEl.innerText : `${idx + 1}. Durak`;
+    const score = scoreEl ? scoreEl.innerText : "";
     text += `${idx + 1}. [${role}] ${name} (${score})\n`;
   });
-  text += `\n✨ İstanbul Gezi Rehberi ile planlandı.`;
+  text += `\n✨ Fırat & Zeliha İstanbul Gezi Rehberi ile planlandı.`;
 
   navigator.clipboard.writeText(text).then(() => {
     showToast("Rota panoya kopyalandı! Arkadaşlarınızla paylaşabilirsiniz.");

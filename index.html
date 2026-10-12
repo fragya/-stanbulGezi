@@ -79,7 +79,7 @@
       --accent-gradient: linear-gradient(135deg, #10b981 0%, #38bdf8 100%);
       --badge-accent: rgba(16, 185, 129, 0.15);
       --badge-text: #34d399;
-      --map-tile-filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+      --map-tile-filter: none;
     }
 
     /* Tema renklerini uygulayan yardımcı sınıflar */
@@ -99,11 +99,10 @@
       min-height: 380px;
       width: 100%;
       z-index: 10;
+      background: #e2e8f0;
     }
-    
-    /* Gece modunda harita koyulaştırma */
-    [data-theme="dark"] .leaflet-tile-pane {
-      filter: var(--map-tile-filter);
+    [data-theme="dark"] #map {
+      background: #0f172a;
     }
     
     @media (max-width: 1023px) {
@@ -115,11 +114,129 @@
         height: 100%;
       }
     }
+
+    /* Tam Ekran Harita Modu */
+    .map-fullscreen-active {
+      position: fixed !important;
+      inset: 1rem !important;
+      z-index: 90 !important;
+      width: auto !important;
+      height: calc(100vh - 2rem) !important;
+      max-height: none !important;
+    }
+    @media (max-width: 640px) {
+      .map-fullscreen-active {
+        inset: 0.5rem !important;
+        height: calc(100vh - 1rem) !important;
+      }
+    }
+    
+    /* Modern Leaflet Zoom Kontrolleri */
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.18) !important;
+      border-radius: 14px !important;
+      overflow: hidden !important;
+      margin-top: 12px !important;
+      margin-left: 12px !important;
+    }
+    .leaflet-control-zoom a {
+      background-color: rgba(255, 255, 255, 0.92) !important;
+      backdrop-filter: blur(8px) !important;
+      color: #0f172a !important;
+      border: none !important;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+      width: 34px !important;
+      height: 34px !important;
+      line-height: 34px !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      transition: all 0.2s ease !important;
+    }
+    [data-theme="dark"] .leaflet-control-zoom a {
+      background-color: rgba(30, 41, 59, 0.92) !important;
+      color: #f8fafc !important;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.8) !important;
+    }
+    .leaflet-control-zoom a:last-child {
+      border-bottom: none !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background-color: #059669 !important;
+      color: #ffffff !important;
+    }
+
+    /* Minimal & Şık Harita Alt Bilgi (Attribution) */
+    .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.75) !important;
+      backdrop-filter: blur(4px) !important;
+      color: #64748b !important;
+      font-size: 9px !important;
+      padding: 2px 8px !important;
+      border-radius: 9999px !important;
+      margin: 0 8px 6px 0 !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    [data-theme="dark"] .leaflet-control-attribution {
+      background: rgba(15, 23, 42, 0.75) !important;
+      color: #94a3b8 !important;
+    }
+    .leaflet-control-attribution a {
+      color: inherit !important;
+      text-decoration: none !important;
+    }
+
+    /* Özel Kapsül Harita Pinleri */
+    .custom-div-icon {
+      background: transparent !important;
+      border: none !important;
+    }
+    .map-pin-capsule {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-weight: 800;
+      font-size: 11px;
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      box-shadow: 0 8px 16px -3px rgba(15, 23, 42, 0.35);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    [data-theme="dark"] .map-pin-capsule {
+      border-color: #1e293b;
+    }
+    .map-pin-capsule:hover {
+      transform: translateY(-3px) scale(1.1);
+      box-shadow: 0 12px 22px -4px rgba(15, 23, 42, 0.45);
+      z-index: 50;
+    }
+    .map-pin-capsule::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 6px 5px 0;
+      border-style: solid;
+      border-color: #ffffff transparent transparent;
+    }
+    [data-theme="dark"] .map-pin-capsule::after {
+      border-color: #1e293b transparent transparent;
+    }
     
     /* Modern Popup */
     .leaflet-popup-content-wrapper {
-      border-radius: 1rem;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+      border-radius: 1.25rem;
+      box-shadow: 0 22px 35px -8px rgba(15, 23, 42, 0.28);
       padding: 0;
       overflow: hidden;
       background: var(--bg-card) !important;
@@ -302,6 +419,24 @@
             </button>
           </div>
 
+          <!-- Kullanıcı (Fırat / Zeliha) Hızlı Filtre Sekmeleri -->
+          <div class="flex items-center justify-between gap-2 pt-0.5">
+            <div class="flex items-center gap-1.5 theme-bg-surface p-1 rounded-xl border theme-border w-full sm:w-auto">
+              <button type="button" id="userPillAll" onclick="window.setUserFilter('all')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-extrabold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5">
+                <span>👥 Tümü</span>
+              </button>
+              <button type="button" id="userPillFirat" onclick="window.setUserFilter('Fırat')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span>
+                <span>Fırat</span>
+              </button>
+              <button type="button" id="userPillZeliha" onclick="window.setUserFilter('Zeliha')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span>
+                <span>Zeliha</span>
+              </button>
+            </div>
+            <input type="hidden" id="userFilter" value="all" />
+          </div>
+
           <!-- Kategori & Bölge Hızlı Çipleri (Yatay Kaydırma) -->
           <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 text-xs">
             <select id="districtFilter" class="theme-bg-surface border theme-border rounded-xl px-3 py-2 text-xs font-semibold theme-text-main focus:outline-none focus:border-emerald-500 shrink-0">
@@ -452,38 +587,66 @@
 
     <!-- Sağ / İkincil Kolon: İnteraktif Harita -->
     <div id="rightMapContainer" class="w-full lg:w-5/12 hidden lg:flex flex-col gap-4 view-transition">
-      <div class="theme-bg-card rounded-3xl border theme-border p-3 sm:p-4 shadow-sm flex flex-col flex-1 h-[480px] lg:h-[calc(100vh-7rem)] sticky top-20">
+      <div id="mapCardWrapper" class="theme-bg-card rounded-3xl border theme-border p-3 sm:p-4 shadow-sm flex flex-col flex-1 h-[500px] lg:h-[calc(100vh-7rem)] sticky top-20 transition-all duration-300">
         
-        <div class="flex items-center justify-between mb-3 px-1">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-              <i data-lucide="map" class="w-4 h-4"></i>
+        <div class="flex items-center justify-between mb-2.5 px-1 gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl theme-gradient-btn text-white flex items-center justify-center font-bold shadow-md shadow-emerald-500/20 shrink-0">
+              <i data-lucide="compass" class="w-4 h-4"></i>
             </div>
-            <div>
-              <h2 class="text-xs sm:text-sm font-extrabold theme-text-main">İstanbul Haritası</h2>
-              <p id="activeMapFilterNote" class="text-[10px] theme-text-muted font-medium">Tüm Mekanlar</p>
+            <div class="truncate">
+              <h2 class="text-xs sm:text-sm font-extrabold theme-text-main leading-tight">İstanbul Haritası</h2>
+              <p id="activeMapFilterNote" class="text-[10px] theme-text-muted font-semibold truncate">Tüm Mekanlar</p>
             </div>
           </div>
 
-          <button id="recenterMapBtn" class="text-xs text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-500/10 px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition">
-            <i data-lucide="locate" class="w-3.5 h-3.5"></i>
-            <span>Ortala</span>
-          </button>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button id="recenterMapBtn" type="button" title="Tüm Mekanları Ortala" class="text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 font-bold bg-emerald-500/10 px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition border border-emerald-500/20">
+              <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i>
+              <span>Ortala</span>
+            </button>
+            <button id="fullscreenMapBtn" type="button" onclick="window.toggleMapFullscreen()" title="Haritayı Büyüt / Küçült" class="p-1.5 theme-text-muted hover:theme-text-main theme-bg-surface hover:opacity-85 rounded-xl border theme-border transition">
+              <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </div>
 
-        <!-- Harita Alanı -->
-        <div class="relative flex-1 w-full rounded-2xl overflow-hidden border theme-border shadow-inner">
+        <!-- Harita Alanı & Yüzen Katman Seçici -->
+        <div class="relative flex-1 w-full rounded-2xl overflow-hidden border theme-border shadow-inner group">
           <div id="map"></div>
+
+          <!-- Harita Görünüm Stili Seçici (Yüzen Cam Efektli Bar) -->
+          <div class="absolute top-3 right-3 z-[25] flex items-center gap-1 p-1 rounded-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 shadow-lg text-[11px] font-bold">
+            <button type="button" id="mapStyleVoyager" onclick="window.setMapTileStyle('voyager')" class="px-2.5 py-1 rounded-lg transition bg-emerald-600 text-white shadow-xs flex items-center gap-1">
+              <span>✨ Modern</span>
+            </button>
+            <button type="button" id="mapStyleGoogle" onclick="window.setMapTileStyle('google')" class="px-2.5 py-1 rounded-lg transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1">
+              <span>🗺️ Sokak</span>
+            </button>
+            <button type="button" id="mapStyleSatellite" onclick="window.setMapTileStyle('satellite')" class="px-2.5 py-1 rounded-lg transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1">
+              <span>🛰️ Uydu</span>
+            </button>
+            <button type="button" id="mapStyleDark" onclick="window.setMapTileStyle('dark')" class="px-2 py-1 rounded-lg transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1" title="Karanlık Harita">
+              <span>🌙</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Puan Renk Skalası Açıklaması -->
-        <div class="mt-3 pt-2.5 border-t theme-border flex items-center justify-between text-[11px] theme-text-muted px-1">
-          <div class="flex items-center gap-1.5">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100"></span> <span>9-10</span>
-            <span class="w-2.5 h-2.5 rounded-full bg-sky-500 ring-2 ring-sky-100 ml-2"></span> <span>7.5-8.9</span>
-            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-100 ml-2"></span> <span>&lt;7.5</span>
+        <!-- Puan & Kullanıcı Renk Skalası Açıklaması -->
+        <div class="mt-2.5 pt-2 border-t theme-border flex flex-wrap items-center justify-between gap-2 text-[10px] theme-text-muted px-1">
+          <div class="flex items-center gap-1.5 font-semibold">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900"></span> <span>9-10</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-500 ring-2 ring-sky-200 dark:ring-sky-900 ml-1.5"></span> <span>7.5-8.9</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-200 dark:ring-rose-900 ml-1.5"></span> <span>&lt;7.5</span>
           </div>
-          <span class="text-[10px] theme-text-muted">Esri / Açık Harita</span>
+          <div class="flex items-center gap-2 font-bold">
+            <span class="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400">
+              <span class="w-3.5 h-3.5 rounded-full bg-sky-600 text-white text-[9px] flex items-center justify-center font-black">F</span> Fırat
+            </span>
+            <span class="inline-flex items-center gap-1 text-rose-500 dark:text-rose-400">
+              <span class="w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] flex items-center justify-center font-black">Z</span> Zeliha
+            </span>
+          </div>
         </div>
 
       </div>
@@ -508,6 +671,46 @@
 
       <form id="placeForm" class="mt-4 space-y-4">
         <input type="hidden" id="placeId" />
+
+        <!-- Kullanıcı Seçimi: Fırat & Zeliha -->
+        <div>
+          <label class="block text-xs font-bold theme-text-main mb-1.5 flex items-center justify-between">
+            <span>👤 Mekanı Ekleyen Kişi *</span>
+            <span class="text-[10px] theme-text-muted font-medium">Kullanıcı Seçin</span>
+          </label>
+          <input type="hidden" id="modalPlaceUser" value="Fırat" />
+          <div class="grid grid-cols-2 gap-3">
+            <button type="button" id="selectUserFiratBtn" onclick="window.selectPlaceUser('Fırat')" class="p-2.5 rounded-2xl border-2 border-sky-500 bg-sky-500/10 flex items-center justify-between transition group cursor-pointer">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-sky-500/25">
+                  F
+                </div>
+                <div class="text-left">
+                  <div class="text-xs sm:text-sm font-extrabold theme-text-main">Fırat</div>
+                  <div class="text-[10px] text-sky-600 dark:text-sky-400 font-bold">Gurme & Gezgin</div>
+                </div>
+              </div>
+              <div id="checkUserFirat" class="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                ✓
+              </div>
+            </button>
+
+            <button type="button" id="selectUserZelihaBtn" onclick="window.selectPlaceUser('Zeliha')" class="p-2.5 rounded-2xl border-2 theme-border theme-bg-surface hover:border-rose-400 flex items-center justify-between transition group cursor-pointer opacity-80">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-rose-500/25">
+                  Z
+                </div>
+                <div class="text-left">
+                  <div class="text-xs sm:text-sm font-extrabold theme-text-main">Zeliha</div>
+                  <div class="text-[10px] text-rose-500 dark:text-rose-400 font-bold">Gurme & Gezgin</div>
+                </div>
+              </div>
+              <div id="checkUserZeliha" class="w-5 h-5 rounded-full border theme-border text-transparent flex items-center justify-center text-xs font-bold">
+                ✓
+              </div>
+            </button>
+          </div>
+        </div>
 
         <!-- Google Maps Tarzı Akıllı Mekan Arama Çubuğu -->
         <div class="theme-bg-surface p-3.5 rounded-2xl border theme-border shadow-sm">
