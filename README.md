@@ -1,32 +1,42 @@
 # 🗺️ İstanbul Gezi & Gurme Rehberi
 
-Gezdiğiniz mekanları 10 üzerinden puanlayabileceğiniz, ilçelere/bölgelere göre listeleyip filtreleyebileceğiniz ve tek tıkla o güne özel **Yemek ➔ Kahve ➔ Tatlı rotası** çıkarabileceğiniz interaktif web uygulaması.
+Gezdiğiniz mekanları ve tarihi/turistik yerleri puanlayabileceğiniz, **Fırat & Zeliha** kullanıcılarına göre etiketleyebileceğiniz, **Gezilecek Yerler** ve **Lezzet Mekanları** olarak ayrı bölmelerde listeleyip tek tıkla rotalar çıkarabileceğiniz interaktif rehberiniz.
+
+---
+
+### 🚀 Nasıl Çalıştırılır? (Kalıcı Hafıza İçin)
+
+1. **Önerilen (Tek Tıkla Başlatma - Kalıcı Disk Kaydı):**
+   - Klasördeki **`GeziRehberi.bat`** dosyasına çift tıklayın.
+   - Uygulama otomatik olarak açılır ve eklediğiniz tüm mekanlar doğrudan bilgisayarınızdaki **`places_data.json`** dosyasına kaydedilir.
+   - Tarayıcınızı kapatsanız veya geçmişi temizleseniz dahi eklediğiniz hiçbir mekan **asla silinmez**!
+
+2. **Alternatif Doğrudan Açılış:**
+   - İsterseniz doğrudan **`index.html`** dosyasına çift tıklayarak da açabilirsiniz. Çok katmanlı IndexedDB ve LocalStorage koruması aktiftir.
 
 ---
 
 ### ✨ Öne Çıkan Özellikler
 
-1. **10 Üzerinden Puanlama:**
-   - Mekanlara 1.0 - 10.0 arası hassas puan verin. Puanlara göre haritada ve kartlarda otomatik renk kodlaması (9+ Mükemmel Yeşil, 7.5+ Amber, <7.5 Kırmızı).
-2. **İnteraktif İstanbul Haritası (Leaflet.js):**
-   - Tüm mekanların konumlarını görün. Mekana tıklayınca harita oraya odaklanır.
-3. **Akıllı Rota Sihirbazı:**
-   - İstediğiniz bölgeyi (örn. *Kadıköy, Karaköy, Moda, Beşiktaş*) ve durak sayısını (2-4 durak) seçin.
-   - Algoritma en yüksek puanlı yerleri **1. Yemek / Öğle Yemeği ➔ 2. Nitelikli Kahve / Cafe ➔ 3. Tatlı Şöleni** sırasına dizerek harita üzerinde çizgiyle birleştirir.
-   - Rotayı tek tıkla panoya kopyalayıp WhatsApp / arkadaşlarınızla paylaşabilirsiniz.
-4. **Bölge & Kategoriye Göre Filtreleme & Arama:**
-   - Mekan adı, meşhur lezzeti veya kişisel notlar içinde anında arama.
-   - Kadıköy, Moda, Karaköy vb. ilçelere ve Yemek, Cafe, Tatlı, Sokak Lezzeti, Bar kategorilerine göre filtreleme.
-5. **Kişisel Notlar ve "Nesi Meşhur?" Alanı:**
-   - Örneğin "Perde pilavı", "San Sebastian cheesecake", "Teras manzarası güzel" gibi hatırlatıcı notlar.
-6. **Sıfır Kurulum & Yerel Hafıza (LocalStorage):**
-   - Sunucu veya veri tabanı kurmanıza gerek yoktur. Tarayıcınızda otomatik saklanır.
-   - **Yedekle / Yükle (JSON):** Bilgisayar değiştirirken verilerinizi tek tıkla JSON olarak dışa aktarabilir ve geri yükleyebilirsiniz.
+1. **🏛️ Ayrı Gezilecek Yerler & Manzaralar Kutucuğu:**
+   - Tarihi yapılar, müzeler, seyir terasları ve sahiller ayrı bir vitrinde listelenir.
+   - Restoranlar, kafeler, tatlıcılar ve sokak lezzetleri ise ayrı bir Lezzet Mekanları vitrininde yer alır.
 
----
+2. **👥 Fırat & Zeliha Kullanıcı Seçimi:**
+   - Mekan eklerken kimin önerdiğini (Fırat veya Zeliha) seçebilirsiniz.
+   - Tek tıkla "Sadece Fırat'ın Ekledikleri" veya "Sadece Zeliha'nın Ekledikleri" olarak filtreleyebilirsiniz.
 
-### 🚀 Nasıl Çalıştırılır?
+3. **💾 Asla Silinmeyen Çok Katmanlı Hafıza:**
+   - **Tier 1 (Disk):** `places_data.json` sabit disk dosyası (GeziRehberi.bat ile).
+   - **Tier 2 (IndexedDB):** Tarayıcı içi yüksek kapasiteli NoSQL veritabanı.
+   - **Tier 3 (LocalStorage & Yedek Anahtarı):** Çift anahtarlı tarayıcı hafızası.
+   - **Tier 4 (JSON Dışa / İçe Aktar):** İstenildiğinde tek tıkla dosya olarak yedekleme.
 
-Herhangi bir kurulum (Node.js, Python vb.) yapmanıza **gerek yoktur**:
+4. **🗺️ Modern Harita Deneyimi:**
+   - Modern Retina Harita, Google Sokak Haritası, Google Uydu ve Gece Haritası olmak üzere 4 farklı harita katmanı.
+   - Mekanlara tıklandığında harita o noktaya odaklanır ve Google Maps yol tarifi linki sunar.
 
-- Klasördeki [`index.html`](file:///c:/Users/affc1/Downloads/Gezi/index.html) dosyasına **çift tıklayarak** Chrome, Edge veya istediğiniz herhangi bir tarayıcıda doğrudan açabilirsiniz!
+5. **✨ Günün Gezi & Lezzet Rotası Sihirbazı:**
+   - İster otomatik semt rotası (Kadıköy, Moda, Karaköy vb.), ister farklı semtlerden mekanları kendiniz seçerek günün rotasını oluşturabilirsiniz.
+   - Rotayı tek tıkla panoya kopyalayıp paylaşabilirsiniz.
+

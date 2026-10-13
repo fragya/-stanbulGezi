@@ -251,13 +251,13 @@ window.setUserFilter = function(userVal) {
 };
 
 // Başlatma
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initIcons();
   initTheme();
   initGooglePlacesApi();
-  loadPlaces();
   initMap();
   setupEventListeners();
+  await loadPlaces();
   renderDistrictDropdowns();
   renderPlaces();
   updateStats();
@@ -396,7 +396,7 @@ window.setAppTheme = function(themeName, notify = true) {
 };
 
 // -------------------------------------------------------------
-// ÇOK KATMANLI KALICI HAFIZA MOTORU (IndexedDB + LocalStorage + Yedek Anahtarı)
+// ÇOK KATMANLI KALICI HAFIZA MOTORU (Disk JSON + IndexedDB + LocalStorage)
 // Mekanların silinmesini, tarayıcı önbellek temizliğini ve 5MB sınırını engeller
 // -------------------------------------------------------------
 const DB_NAME = "IstanbulGeziDB";
@@ -430,6 +430,7 @@ function openDB() {
 }
 
 async function idbSaveAllPlaces(placesArray) {
+  if (!Array.isArray(placesArray) || placesArray.length === 0) return false;
   try {
     const db = await openDB();
     if (!db) return false;
@@ -476,102 +477,190 @@ async function requestPersistentStorage() {
   }
 }
 
-// Kalıcı Hafızadan Yükleme İşlemi (Çoklu Güvenlik Korumalı)
-function loadPlaces() {
-  requestPersistentStorage();
+// -------------------------------------------------------------
+// YEREL PYTHON SUNUCUSU / DİSK BAĞLANTISI (places_data.json)
+// -------------------------------------------------------------
+const SERVER_URLS = [
+  (window.location.protocol.startsWith('http') ? '/api/places' : 'http://127.0.0.1:5000/api/places'),
+  'http://localhost:5000/api/places'
+];
 
-  // 1. Aşama: Anında ekrana basabilmek için localStorage ve yedek anahtarlarını tara
-  let candidatePlaces = null;
+function updateStorageBanner(serverOnline = false) {
+  const banner = document.getElementById("storageBanner");
+  const bannerText = document.getElementById("storageBannerText");
+  if (!banner || !bannerText) return;
 
-  try {
-    const saved = localStorage.getItem("istanbul_gezi_places");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        candidatePlaces = parsed;
-      }
-    }
-  } catch (err) {
-    console.warn("localStorage okuma hatası:", err);
-  }
-
-  // Birincil anahtar boş veya bozuksa, yedek anahtardan kurtar
-  if (!candidatePlaces || candidatePlaces.length === 0) {
-    try {
-      const backup = localStorage.getItem("istanbul_gezi_places_backup");
-      if (backup) {
-        const parsedBackup = JSON.parse(backup);
-        if (Array.isArray(parsedBackup) && parsedBackup.length > 0) {
-          candidatePlaces = parsedBackup;
-          console.log("Mekanlar yedek anahtarından kurtarıldı! ✨");
-        }
-      }
-    } catch (_) {}
-  }
-
-  // SessionStorage tamponunu kontrol et
-  if (!candidatePlaces || candidatePlaces.length === 0) {
-    try {
-      const sess = sessionStorage.getItem("istanbul_gezi_places_session");
-      if (sess) {
-        const parsedSess = JSON.parse(sess);
-        if (Array.isArray(parsedSess) && parsedSess.length > 0) {
-          candidatePlaces = parsedSess;
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Eğer yerel aday bulunduysa hemen kullan, yoksa başlangıç mekanlarını ata
-  if (candidatePlaces && Array.isArray(candidatePlaces) && candidatePlaces.length > 0) {
-    const defaultUserMap = {};
-    DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
-    places = candidatePlaces.map(p => ({
-      ...p,
-      addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
-    }));
+  if (serverOnline) {
+    banner.className = "bg-emerald-50 dark:bg-emerald-950/60 border-b border-emerald-200/60 dark:border-emerald-800/60 px-4 py-2 text-xs transition";
+    bannerText.innerHTML = `💾 <strong>Kalıcı Disk Depolama Aktif:</strong> Mekanlarınız bilgisayarınızda <code class="bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded font-mono text-[11px]">places_data.json</code> dosyasına ve IndexedDB veritabanına doğrudan kaydediliyor.`;
   } else {
-    places = [...DEFAULT_PLACES];
+    banner.className = "bg-amber-50 dark:bg-amber-950/60 border-b border-amber-200/60 dark:border-amber-800/60 px-4 py-2 text-xs transition";
+    bannerText.innerHTML = `⚡ <strong>Tarayıcı Depolaması Aktif:</strong> Mekanlarınız tarayıcınızda korunuyor. Doğrudan sabit diske (<code class="bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded font-mono text-[11px]">places_data.json</code>) kaydetmek için klasördeki <strong class="text-amber-800 dark:text-amber-200">GeziRehberi.bat</strong> dosyasına çift tıklayarak başlatabilirsiniz.`;
+  }
+}
+
+async function fetchPlacesFromServer() {
+  for (const url of SERVER_URLS) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          updateStorageBanner(true);
+          return data;
+        }
+      }
+    } catch (_) {}
+  }
+  updateStorageBanner(false);
+  return null;
+}
+
+let pendingSyncPlaces = null;
+let isSyncingToServer = false;
+
+async function syncPlacesToServer(placesArray) {
+  if (!Array.isArray(placesArray) || placesArray.length === 0) return false;
+  pendingSyncPlaces = placesArray;
+  if (isSyncingToServer) return true;
+  isSyncingToServer = true;
+
+  while (pendingSyncPlaces) {
+    const toSend = pendingSyncPlaces;
+    pendingSyncPlaces = null;
+    let success = false;
+
+    for (const url of SERVER_URLS) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify(toSend),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          updateStorageBanner(true);
+          success = true;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (!success) {
+      updateStorageBanner(false);
+      break;
+    }
   }
 
-  // 2. Aşama: Asenkron olarak IndexedDB'yi doğrula (Daha güncel veya fotoğraflı veriler varsa birleştir)
-  idbLoadAllPlaces().then((idbPlaces) => {
-    if (idbPlaces && Array.isArray(idbPlaces) && idbPlaces.length > 0) {
-      // Eğer IndexedDB'de localStorage'dan daha fazla mekan varsa veya kullanıcı mekanları varsa geri yükle
-      const hasCustomPlacesInIdb = idbPlaces.some(ip => !DEFAULT_PLACES.some(dp => dp.id === ip.id));
-      const hasCustomPlacesInLocal = places.some(p => !DEFAULT_PLACES.some(dp => dp.id === p.id));
+  isSyncingToServer = false;
+  return true;
+}
 
-      if (idbPlaces.length > places.length || (hasCustomPlacesInIdb && !hasCustomPlacesInLocal)) {
-        console.log("IndexedDB'den kalıcı mekanlar başarıyla geri yüklendi! 🚀");
-        const defaultUserMap = {};
-        DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
-        places = idbPlaces.map(p => ({
-          ...p,
-          addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
-        }));
-        savePlaces();
-        renderPlaces();
-        updateStats();
-        renderDistrictDropdowns();
-        if (map) updateMapMarkers(getFilteredPlaces());
-      }
-    } else {
-      // IndexedDB henüz boşsa mevcut yerleri IndexedDB'ye de yaz
-      idbSaveAllPlaces(places);
+let isStorageLoaded = false;
+
+// Kalıcı Hafızadan Yükleme İşlemi (Çoklu Güvenlik Korumalı)
+async function loadPlaces() {
+  await requestPersistentStorage();
+
+  // 1. Önce sunucudan (places_data.json) oku
+  const serverPlaces = await fetchPlacesFromServer();
+
+  // 2. IndexedDB kalıcı veritabanından oku
+  const idbPlaces = await idbLoadAllPlaces();
+
+  // 3. Yerel depolamayı (localStorage & backup & session) oku
+  let localData = null;
+  try {
+    const raw = localStorage.getItem("istanbul_gezi_places");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) localData = parsed;
     }
-  });
+  } catch (_) {}
 
+  if (!localData) {
+    try {
+      const backupRaw = localStorage.getItem("istanbul_gezi_places_backup");
+      if (backupRaw) {
+        const parsedBackup = JSON.parse(backupRaw);
+        if (Array.isArray(parsedBackup) && parsedBackup.length > 0) localData = parsedBackup;
+      }
+    } catch (_) {}
+  }
+
+  if (!localData) {
+    try {
+      const sessRaw = sessionStorage.getItem("istanbul_gezi_places_session");
+      if (sessRaw) {
+        const parsedSess = JSON.parse(sessRaw);
+        if (Array.isArray(parsedSess) && parsedSess.length > 0) localData = parsedSess;
+      }
+    } catch (_) {}
+  }
+
+  // En güvenilir ana kaynağı belirle
+  let resolved = null;
+  if (serverPlaces && Array.isArray(serverPlaces) && serverPlaces.length > 0) {
+    resolved = [...serverPlaces];
+    console.log("Mekanlar sabit diskteki places_data.json dosyasından yüklendi! 💾", resolved.length);
+  } else if (idbPlaces && Array.isArray(idbPlaces) && idbPlaces.length > 0) {
+    resolved = [...idbPlaces];
+    console.log("Mekanlar IndexedDB veritabanından yüklendi! 🚀", resolved.length);
+  } else if (localData && Array.isArray(localData) && localData.length > 0) {
+    resolved = [...localData];
+    console.log("Mekanlar localStorage hafızasından yüklendi! 📦", resolved.length);
+  }
+
+  // Akıllı Birleştirme: Tüm kaynaklardaki ek mekanları asla kaybetmeden birleştir
+  if (resolved && Array.isArray(resolved)) {
+    const existingIds = new Set(resolved.map(p => p.id));
+    const allCandidates = [...(serverPlaces || []), ...(idbPlaces || []), ...(localData || [])];
+    allCandidates.forEach(cand => {
+      if (cand && cand.id && !existingIds.has(cand.id)) {
+        resolved.push(cand);
+        existingIds.add(cand.id);
+      }
+    });
+  }
+
+  // Eğer hiçbir kaynakta veri bulunamadıysa başlangıç mekanlarını ata
+  if (!resolved || resolved.length === 0) {
+    resolved = [...DEFAULT_PLACES];
+  }
+
+  // Fırat ve Zeliha kullanıcı rozetlerini güvenceye al
+  const defaultUserMap = {};
+  DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
+  places = resolved.map(p => ({
+    ...p,
+    addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
+  }));
+
+  isStorageLoaded = true;
+
+  // Tüm katmanları senkronize et
   savePlaces();
 }
 
 function savePlaces() {
+  if (!isStorageLoaded && (!places || places.length === 0)) return;
+
   updateStats();
   renderDistrictDropdowns();
 
-  // Tier 1: IndexedDB (Sınırsız kota, kalıcı disk depolama)
+  // 1. Sabit diske (places_data.json) yaz
+  syncPlacesToServer(places);
+
+  // 2. IndexedDB kalıcı veritabanına yaz
   idbSaveAllPlaces(places);
 
-  // Tier 2: localStorage (Hızlı senkron kopya) & Tier 3: Güvenlik Yedek Anahtarı
+  // 3. localStorage ve güvenlik yedek anahtarına yaz
   try {
     const dataStr = JSON.stringify(places);
     localStorage.setItem("istanbul_gezi_places", dataStr);
@@ -580,8 +669,6 @@ function savePlaces() {
     }
   } catch (e) {
     console.warn("localStorage kotası aşıldı, hafifletilmiş yedekleme yapılıyor:", e);
-    // Fotoğraflar 5MB sınırını aştıysa, localStorage'a fotoğraftan arındırılmış hafif kopyayı yaz
-    // (Orijinal fotoğraflar IndexedDB'de güvende kalır)
     try {
       const lightPlaces = places.map(p => {
         if (p.image && p.image.length > 40000) {
@@ -593,12 +680,9 @@ function savePlaces() {
       const lightStr = JSON.stringify(lightPlaces);
       localStorage.setItem("istanbul_gezi_places", lightStr);
       localStorage.setItem("istanbul_gezi_places_backup", lightStr);
-    } catch (e2) {
-      console.warn("Hafifletilmiş localStorage da kaydedilemedi:", e2);
-    }
+    } catch (_) {}
   }
 
-  // Tier 4: sessionStorage (Sekme içi anlık kurtarma tamponu)
   try {
     sessionStorage.setItem("istanbul_gezi_places_session", JSON.stringify(places));
   } catch (_) {}
@@ -852,130 +936,185 @@ function getFilteredPlaces() {
   return filtered;
 }
 
-function renderPlaces() {
-  const container = document.getElementById("placesList");
-  const emptyState = document.getElementById("emptyState");
-  const filtered = getFilteredPlaces();
+// Mekan Kartı HTML Üretici
+function createPlaceCard(place) {
+  const card = document.createElement("div");
+  card.id = `card-${place.id}`;
+  card.className = "theme-bg-card rounded-3xl border theme-border p-4 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
 
-  container.innerHTML = "";
-
-  if (filtered.length === 0) {
-    emptyState.classList.remove("hidden");
-  } else {
-    emptyState.classList.add("hidden");
+  // Kategoriye göre ikon/etiket
+  let catBadgeColor = "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/80";
+  let catIcon = "🍽️";
+  if (place.category === 'Gezilecek Yer') { 
+    catBadgeColor = "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200/80 dark:border-sky-800/80"; 
+    catIcon = "🏛️"; 
+  } else if (place.category === 'Cafe') { 
+    catBadgeColor = "bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200/80 dark:border-teal-800/80"; 
+    catIcon = "☕"; 
+  } else if (place.category === 'Tatlı') { 
+    catBadgeColor = "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/80"; 
+    catIcon = "🍰"; 
+  } else if (place.category === 'Sokak Lezzeti') { 
+    catBadgeColor = "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/80"; 
+    catIcon = "🌯"; 
+  } else if (place.category === 'Meyhane / Bar') { 
+    catBadgeColor = "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800/80"; 
+    catIcon = "🍸"; 
   }
 
-  filtered.forEach(place => {
-    const card = document.createElement("div");
-    card.id = `card-${place.id}`;
-    card.className = "theme-bg-card rounded-3xl border theme-border p-4 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
+  // Skor rozeti (Mavi & Yeşil Paleti)
+  let scoreBadgeColor = "bg-emerald-600 text-white shadow-emerald-500/25";
+  if (place.score < 7.5) scoreBadgeColor = "bg-rose-500 text-white shadow-rose-500/25";
+  else if (place.score < 9.0) scoreBadgeColor = "bg-sky-600 text-white shadow-sky-500/25";
 
-    // Kategoriye göre ikon/etiket
-    let catBadgeColor = "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/80";
-    let catIcon = "🍽️";
-    if (place.category === 'Gezilecek Yer') { 
-      catBadgeColor = "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200/80 dark:border-sky-800/80"; 
-      catIcon = "🏛️"; 
-    } else if (place.category === 'Cafe') { 
-      catBadgeColor = "bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200/80 dark:border-teal-800/80"; 
-      catIcon = "☕"; 
-    } else if (place.category === 'Tatlı') { 
-      catBadgeColor = "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/80"; 
-      catIcon = "🍰"; 
-    } else if (place.category === 'Sokak Lezzeti') { 
-      catBadgeColor = "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/80"; 
-      catIcon = "🌯"; 
-    } else if (place.category === 'Meyhane / Bar') { 
-      catBadgeColor = "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800/80"; 
-      catIcon = "🍸"; 
-    }
+  // Google Maps Yol Tarifi linki
+  const gmapsUrl = place.lat && place.lng 
+    ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}` 
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
 
-    // Skor rozeti (Mavi & Yeşil Paleti)
-    let scoreBadgeColor = "bg-emerald-600 text-white shadow-emerald-500/25";
-    if (place.score < 7.5) scoreBadgeColor = "bg-rose-500 text-white shadow-rose-500/25";
-    else if (place.score < 9.0) scoreBadgeColor = "bg-sky-600 text-white shadow-sky-500/25";
+  // Mekan Fotoğrafı HTML (Varsa şık kapak banner'ı)
+  const imageHtml = place.image ? `
+    <div class="relative w-full h-36 rounded-2xl overflow-hidden mb-3 border theme-border shadow-inner group-hover:scale-[1.01] transition duration-300">
+      <img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-full object-cover" loading="lazy" />
+      <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+    </div>
+  ` : '';
 
-    // Google Maps Yol Tarifi linki
-    const gmapsUrl = place.lat && place.lng 
-      ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}` 
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.district + ' İstanbul')}`;
-
-    // Mekan Fotoğrafı HTML (Varsa şık kapak banner'ı)
-    const imageHtml = place.image ? `
-      <div class="relative w-full h-36 rounded-2xl overflow-hidden mb-3 border theme-border shadow-inner group-hover:scale-[1.01] transition duration-300">
-        <img src="${place.image}" alt="${escapeHtml(place.name)}" class="w-full h-full object-cover" loading="lazy" />
-        <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
-      </div>
-    ` : '';
-
-    card.innerHTML = `
-      <div>
-        ${imageHtml}
-        <div class="flex items-start justify-between gap-3 mb-2.5">
-          <div class="space-y-1">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${catBadgeColor} flex items-center gap-1">
-                <span>${catIcon}</span>
-                <span>${escapeHtml(place.category)}</span>
-              </span>
-              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg theme-bg-surface theme-text-muted border theme-border">
-                📍 ${escapeHtml(place.district)}
-              </span>
-              ${getUserBadgeHtml(place.addedBy)}
-            </div>
-            <h3 class="text-base font-extrabold theme-text-main group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition leading-snug">${escapeHtml(place.name)}</h3>
+  card.innerHTML = `
+    <div>
+      ${imageHtml}
+      <div class="flex items-start justify-between gap-3 mb-2.5">
+        <div class="space-y-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg border ${catBadgeColor} flex items-center gap-1">
+              <span>${catIcon}</span>
+              <span>${escapeHtml(place.category)}</span>
+            </span>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-lg theme-bg-surface theme-text-muted border theme-border">
+              📍 ${escapeHtml(place.district)}
+            </span>
+            ${getUserBadgeHtml(place.addedBy)}
           </div>
-          
-          <div class="flex flex-col items-end shrink-0">
-            <div class="px-2.5 py-1 rounded-xl text-xs font-black shadow-md flex items-center gap-1 ${scoreBadgeColor}">
-              <i data-lucide="star" class="w-3 h-3 fill-white"></i>
-              <span>${Number(place.score).toFixed(1)}</span>
-            </div>
-          </div>
-        </div>
-
-        ${place.favorite ? `
-          <div class="mt-2.5 text-xs theme-bg-surface border theme-border p-2.5 rounded-xl">
-            <div class="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-0.5">
-              <i data-lucide="sparkles" class="w-3 h-3 text-emerald-500"></i>
-              <span>Favori / Meşhur:</span>
-            </div>
-            <span class="theme-text-main font-medium">${escapeHtml(place.favorite)}</span>
-          </div>
-        ` : ''}
-
-        ${place.notes ? `
-          <p class="mt-2.5 text-xs theme-text-muted italic line-clamp-2 theme-bg-surface/60 p-2 rounded-xl border theme-border">
-            "${escapeHtml(place.notes)}"
-          </p>
-        ` : ''}
-      </div>
-
-      <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between text-xs">
-        <div class="flex items-center gap-2">
-          <button onclick="window.zoomToPlace('${place.id}')" class="text-emerald-600 dark:text-emerald-400 hover:opacity-85 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl transition border border-emerald-200/50 dark:border-emerald-800/50">
-            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
-            <span>Haritada</span>
-          </button>
-          <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="theme-text-muted hover:theme-text-main font-semibold flex items-center gap-1 theme-bg-surface hover:opacity-85 px-2.5 py-1.5 rounded-xl transition border theme-border" title="Google Haritalar ile Yol Tarifi Al">
-            <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-500"></i>
-            <span class="hidden sm:inline">Git</span>
-          </a>
+          <h3 class="text-base font-extrabold theme-text-main group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition leading-snug">${escapeHtml(place.name)}</h3>
         </div>
         
-        <div class="flex items-center gap-1">
-          <button onclick="window.editPlace('${place.id}')" class="p-2 theme-text-muted hover:theme-text-main hover:theme-bg-surface rounded-xl transition" title="Düzenle">
-            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-          </button>
-          <button onclick="window.deletePlace('${place.id}')" class="p-2 theme-text-muted hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition" title="Sil">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          </button>
+        <div class="flex flex-col items-end shrink-0">
+          <div class="px-2.5 py-1 rounded-xl text-xs font-black shadow-md flex items-center gap-1 ${scoreBadgeColor}">
+            <i data-lucide="star" class="w-3 h-3 fill-white"></i>
+            <span>${Number(place.score).toFixed(1)}</span>
+          </div>
         </div>
       </div>
-    `;
 
-    container.appendChild(card);
-  });
+      ${place.favorite ? `
+        <div class="mt-2.5 text-xs theme-bg-surface border theme-border p-2.5 rounded-xl">
+          <div class="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-0.5">
+            <i data-lucide="sparkles" class="w-3 h-3 text-emerald-500"></i>
+            <span>Favori / Meşhur:</span>
+          </div>
+          <span class="theme-text-main font-medium">${escapeHtml(place.favorite)}</span>
+        </div>
+      ` : ''}
+
+      ${place.notes ? `
+        <p class="mt-2.5 text-xs theme-text-muted italic line-clamp-2 theme-bg-surface/60 p-2 rounded-xl border theme-border">
+          "${escapeHtml(place.notes)}"
+        </p>
+      ` : ''}
+    </div>
+
+    <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2">
+        <button onclick="window.zoomToPlace('${place.id}')" class="text-emerald-600 dark:text-emerald-400 hover:opacity-85 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl transition border border-emerald-200/50 dark:border-emerald-800/50">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+          <span>Haritada</span>
+        </button>
+        <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="theme-text-muted hover:theme-text-main font-semibold flex items-center gap-1 theme-bg-surface hover:opacity-85 px-2.5 py-1.5 rounded-xl transition border theme-border" title="Google Haritalar ile Yol Tarifi Al">
+          <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-500"></i>
+          <span class="hidden sm:inline">Git</span>
+        </a>
+      </div>
+      
+      <div class="flex items-center gap-1">
+        <button onclick="window.editPlace('${place.id}')" class="p-2 theme-text-muted hover:theme-text-main hover:theme-bg-surface rounded-xl transition" title="Düzenle">
+          <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+        </button>
+        <button onclick="window.deletePlace('${place.id}')" class="p-2 theme-text-muted hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition" title="Sil">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  return card;
+}
+
+// Mekanları Ekrana Basma (🏛️ Gezilecek Yerler ve 🍽️ Lezzet Mekanları Ayrı Kutucuklarda)
+function renderPlaces() {
+  const sightsContainer = document.getElementById("sightsContainer");
+  const sightsList = document.getElementById("sightsList");
+  const sightsCountBadge = document.getElementById("sightsCountBadge");
+
+  const foodPlacesContainer = document.getElementById("foodPlacesContainer");
+  const foodPlacesList = document.getElementById("foodPlacesList");
+  const foodsCountBadge = document.getElementById("foodsCountBadge");
+
+  const emptyState = document.getElementById("emptyState");
+  const fallbackList = document.getElementById("placesList");
+
+  const filtered = getFilteredPlaces();
+
+  if (filtered.length === 0) {
+    if (emptyState) emptyState.classList.remove("hidden");
+    if (sightsContainer) sightsContainer.classList.add("hidden");
+    if (foodPlacesContainer) foodPlacesContainer.classList.add("hidden");
+    if (fallbackList) fallbackList.innerHTML = "";
+    updateMapMarkers([]);
+    initIcons();
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add("hidden");
+
+  // Gezilecek Yerler vs Gurme/Lezzet mekanları ayrımı
+  const sights = filtered.filter(p => p.category === 'Gezilecek Yer');
+  const foodPlaces = filtered.filter(p => p.category !== 'Gezilecek Yer');
+
+  // 1. KUTU: 🏛️ Gezilecek Yerler, Müzeler & Manzaralar
+  if (sightsContainer && sightsList) {
+    if (sights.length === 0) {
+      sightsContainer.classList.add("hidden");
+    } else {
+      sightsContainer.classList.remove("hidden");
+      if (sightsCountBadge) sightsCountBadge.innerText = `${sights.length} Yer`;
+      sightsList.innerHTML = "";
+      sights.forEach(place => {
+        sightsList.appendChild(createPlaceCard(place));
+      });
+    }
+  }
+
+  // 2. KUTU: 🍽️ Yeme, İçme & Gurme Mekanları
+  if (foodPlacesContainer && foodPlacesList) {
+    if (foodPlaces.length === 0) {
+      foodPlacesContainer.classList.add("hidden");
+    } else {
+      foodPlacesContainer.classList.remove("hidden");
+      if (foodsCountBadge) foodsCountBadge.innerText = `${foodPlaces.length} Mekan`;
+      foodPlacesList.innerHTML = "";
+      foodPlaces.forEach(place => {
+        foodPlacesList.appendChild(createPlaceCard(place));
+      });
+    }
+  }
+
+  // Geriye dönük uyumluluk: Eski tekil #placesList varsa
+  if (fallbackList && !sightsList) {
+    fallbackList.innerHTML = "";
+    filtered.forEach(place => {
+      fallbackList.appendChild(createPlaceCard(place));
+    });
+  }
 
   updateMapMarkers(filtered);
   initIcons();
