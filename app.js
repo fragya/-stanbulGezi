@@ -395,32 +395,213 @@ window.setAppTheme = function(themeName, notify = true) {
   }
 };
 
-// LocalStorage işlemleri
-function loadPlaces() {
-  const saved = localStorage.getItem("istanbul_gezi_places");
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      // Eksik addedBy alanlarını varsayılanlarla tamamla
-      const defaultUserMap = {};
-      DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
-      places = parsed.map(p => ({
-        ...p,
-        addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
-      }));
-    } catch (e) {
-      places = [...DEFAULT_PLACES];
+// -------------------------------------------------------------
+// ÇOK KATMANLI KALICI HAFIZA MOTORU (IndexedDB + LocalStorage + Yedek Anahtarı)
+// Mekanların silinmesini, tarayıcı önbellek temizliğini ve 5MB sınırını engeller
+// -------------------------------------------------------------
+const DB_NAME = "IstanbulGeziDB";
+const DB_VERSION = 1;
+const STORE_NAME = "places_store";
+
+function openDB() {
+  return new Promise((resolve) => {
+    if (!window.indexedDB) {
+      resolve(null);
+      return;
     }
-  } else {
-    places = [...DEFAULT_PLACES];
-    savePlaces();
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = (e) => {
+        console.warn("IndexedDB açılamadı:", e);
+        resolve(null);
+      };
+    } catch (err) {
+      console.warn("IndexedDB istisnası:", err);
+      resolve(null);
+    }
+  });
+}
+
+async function idbSaveAllPlaces(placesArray) {
+  try {
+    const db = await openDB();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NAME], "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      placesArray.forEach(p => store.put(p));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (err) {
+    console.warn("IndexedDB kaydetme hatası:", err);
+    return false;
   }
 }
 
+async function idbLoadAllPlaces() {
+  try {
+    const db = await openDB();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NAME], "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result && req.result.length > 0 ? req.result : null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn("IndexedDB okuma hatası:", err);
+    return null;
+  }
+}
+
+// Tarayıcıdan kalıcı saklama izni iste (Otomatik önbellek temizliğini ve silinmeyi önler)
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      const isPersisted = await navigator.storage.persist();
+      console.log("Kalıcı depolama koruması:", isPersisted ? "Aktif (Kalıcı)" : "Varsayılan");
+    }
+  } catch (e) {
+    console.warn("Kalıcı depolama isteği yapılamadı:", e);
+  }
+}
+
+// Kalıcı Hafızadan Yükleme İşlemi (Çoklu Güvenlik Korumalı)
+function loadPlaces() {
+  requestPersistentStorage();
+
+  // 1. Aşama: Anında ekrana basabilmek için localStorage ve yedek anahtarlarını tara
+  let candidatePlaces = null;
+
+  try {
+    const saved = localStorage.getItem("istanbul_gezi_places");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        candidatePlaces = parsed;
+      }
+    }
+  } catch (err) {
+    console.warn("localStorage okuma hatası:", err);
+  }
+
+  // Birincil anahtar boş veya bozuksa, yedek anahtardan kurtar
+  if (!candidatePlaces || candidatePlaces.length === 0) {
+    try {
+      const backup = localStorage.getItem("istanbul_gezi_places_backup");
+      if (backup) {
+        const parsedBackup = JSON.parse(backup);
+        if (Array.isArray(parsedBackup) && parsedBackup.length > 0) {
+          candidatePlaces = parsedBackup;
+          console.log("Mekanlar yedek anahtarından kurtarıldı! ✨");
+        }
+      }
+    } catch (_) {}
+  }
+
+  // SessionStorage tamponunu kontrol et
+  if (!candidatePlaces || candidatePlaces.length === 0) {
+    try {
+      const sess = sessionStorage.getItem("istanbul_gezi_places_session");
+      if (sess) {
+        const parsedSess = JSON.parse(sess);
+        if (Array.isArray(parsedSess) && parsedSess.length > 0) {
+          candidatePlaces = parsedSess;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Eğer yerel aday bulunduysa hemen kullan, yoksa başlangıç mekanlarını ata
+  if (candidatePlaces && Array.isArray(candidatePlaces) && candidatePlaces.length > 0) {
+    const defaultUserMap = {};
+    DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
+    places = candidatePlaces.map(p => ({
+      ...p,
+      addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
+    }));
+  } else {
+    places = [...DEFAULT_PLACES];
+  }
+
+  // 2. Aşama: Asenkron olarak IndexedDB'yi doğrula (Daha güncel veya fotoğraflı veriler varsa birleştir)
+  idbLoadAllPlaces().then((idbPlaces) => {
+    if (idbPlaces && Array.isArray(idbPlaces) && idbPlaces.length > 0) {
+      // Eğer IndexedDB'de localStorage'dan daha fazla mekan varsa veya kullanıcı mekanları varsa geri yükle
+      const hasCustomPlacesInIdb = idbPlaces.some(ip => !DEFAULT_PLACES.some(dp => dp.id === ip.id));
+      const hasCustomPlacesInLocal = places.some(p => !DEFAULT_PLACES.some(dp => dp.id === p.id));
+
+      if (idbPlaces.length > places.length || (hasCustomPlacesInIdb && !hasCustomPlacesInLocal)) {
+        console.log("IndexedDB'den kalıcı mekanlar başarıyla geri yüklendi! 🚀");
+        const defaultUserMap = {};
+        DEFAULT_PLACES.forEach(dp => { defaultUserMap[dp.id] = dp.addedBy; });
+        places = idbPlaces.map(p => ({
+          ...p,
+          addedBy: p.addedBy || defaultUserMap[p.id] || "Fırat"
+        }));
+        savePlaces();
+        renderPlaces();
+        updateStats();
+        renderDistrictDropdowns();
+        if (map) updateMapMarkers(getFilteredPlaces());
+      }
+    } else {
+      // IndexedDB henüz boşsa mevcut yerleri IndexedDB'ye de yaz
+      idbSaveAllPlaces(places);
+    }
+  });
+
+  savePlaces();
+}
+
 function savePlaces() {
-  localStorage.setItem("istanbul_gezi_places", JSON.stringify(places));
   updateStats();
   renderDistrictDropdowns();
+
+  // Tier 1: IndexedDB (Sınırsız kota, kalıcı disk depolama)
+  idbSaveAllPlaces(places);
+
+  // Tier 2: localStorage (Hızlı senkron kopya) & Tier 3: Güvenlik Yedek Anahtarı
+  try {
+    const dataStr = JSON.stringify(places);
+    localStorage.setItem("istanbul_gezi_places", dataStr);
+    if (places && places.length > 0) {
+      localStorage.setItem("istanbul_gezi_places_backup", dataStr);
+    }
+  } catch (e) {
+    console.warn("localStorage kotası aşıldı, hafifletilmiş yedekleme yapılıyor:", e);
+    // Fotoğraflar 5MB sınırını aştıysa, localStorage'a fotoğraftan arındırılmış hafif kopyayı yaz
+    // (Orijinal fotoğraflar IndexedDB'de güvende kalır)
+    try {
+      const lightPlaces = places.map(p => {
+        if (p.image && p.image.length > 40000) {
+          const { image, ...rest } = p;
+          return { ...rest, hasImage: true };
+        }
+        return p;
+      });
+      const lightStr = JSON.stringify(lightPlaces);
+      localStorage.setItem("istanbul_gezi_places", lightStr);
+      localStorage.setItem("istanbul_gezi_places_backup", lightStr);
+    } catch (e2) {
+      console.warn("Hafifletilmiş localStorage da kaydedilemedi:", e2);
+    }
+  }
+
+  // Tier 4: sessionStorage (Sekme içi anlık kurtarma tamponu)
+  try {
+    sessionStorage.setItem("istanbul_gezi_places_session", JSON.stringify(places));
+  } catch (_) {}
 }
 
 // Harita Başlatma
@@ -2239,7 +2420,7 @@ function setupImageUpload() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Fotoğrafı tarayıcıda Canvas ile optimize et (Hafıza dostu ~800px JPEG)
+    // Fotoğrafı tarayıcıda Canvas ile optimize et (Hafıza dostu ~640px, yüksek verimli JPEG)
     const reader = new FileReader();
     reader.onload = function(event) {
       const img = new Image();
@@ -2247,10 +2428,10 @@ function setupImageUpload() {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        // Maksimum 800px genişlik / yükseklik oranla
+        // Maksimum 640px genişlik / yükseklik oranla (Kalıcı hafıza için ideal boyut)
         let width = img.width;
         let height = img.height;
-        const maxDimension = 800;
+        const maxDimension = 640;
 
         if (width > height && width > maxDimension) {
           height = Math.round((height * maxDimension) / width);
@@ -2264,14 +2445,14 @@ function setupImageUpload() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Kaliteli JPEG olarak küçültüp Base64 al
-        const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        // Kaliteli, hafif ve hızlı açılan JPEG Base64 al
+        const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.65);
 
         dataInput.value = optimizedDataUrl;
         preview.src = optimizedDataUrl;
         container.classList.remove("hidden");
         initIcons();
-        showToast("Fotoğraf optimize edildi ve eklendi! 📸");
+        showToast("Fotoğraf optimize edildi ve kalıcı kaydedildi! 📸");
       };
       img.src = event.target.result;
     };

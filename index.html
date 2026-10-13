@@ -334,13 +334,13 @@
           </div>
         </div>
 
-        <button id="exportBtn" title="Verileri JSON Olarak İndir" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 theme-text-main hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-xs font-semibold border theme-border">
+        <button id="exportBtn" title="Verileri JSON Olarak İndir / Yedekle" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 theme-text-main hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-xs font-semibold border theme-border">
           <i data-lucide="download" class="w-3.5 h-3.5 theme-text-muted"></i>
-          <span>Yedekle</span>
+          <span class="hidden sm:inline">Yedekle</span>
         </button>
-        <button id="importBtnTrigger" title="Yedek JSON Yükle" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 theme-text-main hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-xs font-semibold border theme-border">
+        <button id="importBtnTrigger" title="Yedek JSON Yükle / Geri Yükle" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 theme-text-main hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-xs font-semibold border theme-border">
           <i data-lucide="upload" class="w-3.5 h-3.5 theme-text-muted"></i>
-          <span>Yükle</span>
+          <span class="hidden sm:inline">Yükle</span>
         </button>
         <input type="file" id="importInput" accept=".json" class="hidden" />
 
