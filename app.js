@@ -224,6 +224,40 @@ window.setUserFilter = function(userVal) {
   renderPlaces();
 };
 
+// Gidilecek Yerler için Kullanıcı Hızlı Filtreleme
+window.setSightsUserFilter = function(userVal) {
+  const input = document.getElementById("sightsUserFilter");
+  if (input) input.value = userVal;
+
+  const pillAll = document.getElementById("sightsUserPillAll");
+  const pillFirat = document.getElementById("sightsUserPillFirat");
+  const pillZeliha = document.getElementById("sightsUserPillZeliha");
+
+  const activeClass = "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-extrabold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
+  const inactiveClass = "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5";
+
+  if (pillAll) pillAll.className = userVal === "all" ? activeClass : inactiveClass;
+  if (pillFirat) pillFirat.className = userVal === "Fırat" ? activeClass : inactiveClass;
+  if (pillZeliha) pillZeliha.className = userVal === "Zeliha" ? activeClass : inactiveClass;
+
+  renderPlaces();
+};
+
+// Ziyaret Edildi / Gidilecek Durumunu Değiştir
+window.togglePlaceVisited = function(id) {
+  const p = places.find(x => x.id === id);
+  if (!p) return;
+  if (p.status === 'visited') {
+    p.status = 'to_visit';
+    showToast(`"${p.name}" tekrar Gidilecek Yerler listesine alındı! 📌`);
+  } else {
+    p.status = 'visited';
+    showToast(`Tebrikler! "${p.name}" ziyaret edildi olarak işaretlendi! 🎉`);
+  }
+  savePlaces();
+  renderPlaces();
+};
+
 // Başlatma
 document.addEventListener("DOMContentLoaded", async () => {
   initIcons();
@@ -878,22 +912,42 @@ function updateMapMarkers(placesToShow) {
 
 // İstatistikleri güncelleme
 function updateStats() {
+  const foodPlaces = places.filter(p => p.category !== 'Gezilecek Yer');
+  const sightsPlaces = places.filter(p => p.category === 'Gezilecek Yer' || p.status === 'to_visit');
+
   const badge = document.getElementById("placesCountBadge");
-  if (badge) badge.innerText = places.length;
+  if (badge) badge.innerText = foodPlaces.length;
+
+  const sightsBadge = document.getElementById("sightsCountBadgeDesktop");
+  if (sightsBadge) sightsBadge.innerText = sightsPlaces.length;
   
   const mBadge = document.getElementById("mobileCountDisplay");
-  if (mBadge) mBadge.innerText = `${places.length} Mekan`;
+  if (mBadge) mBadge.innerText = `${places.length} Mekan & Yer`;
 
-  const firatCount = places.filter(p => (p.addedBy || "Fırat") === "Fırat").length;
-  const zelihaCount = places.filter(p => p.addedBy === "Zeliha").length;
+  // Mekanlar sekmesi Fırat / Zeliha sayıları
+  const foodFiratCount = foodPlaces.filter(p => (p.addedBy || "Fırat") === "Fırat").length;
+  const foodZelihaCount = foodPlaces.filter(p => p.addedBy === "Zeliha").length;
 
   const pillFirat = document.getElementById("userPillFirat");
   if (pillFirat) {
-    pillFirat.innerHTML = `<span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span><span>Fırat (${firatCount})</span>`;
+    pillFirat.innerHTML = `<span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span><span>Fırat (${foodFiratCount})</span>`;
   }
   const pillZeliha = document.getElementById("userPillZeliha");
   if (pillZeliha) {
-    pillZeliha.innerHTML = `<span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span><span>Zeliha (${zelihaCount})</span>`;
+    pillZeliha.innerHTML = `<span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span><span>Zeliha (${foodZelihaCount})</span>`;
+  }
+
+  // Gidilecek Yerler sekmesi Fırat / Zeliha sayıları
+  const sightsFiratCount = sightsPlaces.filter(p => (p.addedBy || "Fırat") === "Fırat").length;
+  const sightsZelihaCount = sightsPlaces.filter(p => p.addedBy === "Zeliha").length;
+
+  const sPillFirat = document.getElementById("sightsUserPillFirat");
+  if (sPillFirat) {
+    sPillFirat.innerHTML = `<span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span><span>Fırat (${sightsFiratCount})</span>`;
+  }
+  const sPillZeliha = document.getElementById("sightsUserPillZeliha");
+  if (sPillZeliha) {
+    sPillZeliha.innerHTML = `<span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span><span>Zeliha (${sightsZelihaCount})</span>`;
   }
 
   const avgDisplay = document.getElementById("avgScoreDisplay");
@@ -909,16 +963,28 @@ function updateStats() {
   initIcons();
 }
 
-// Filtreler & Mekan Listesi
-function getFilteredPlaces() {
-  const search = document.getElementById("searchInput").value.toLowerCase().trim();
-  const district = document.getElementById("districtFilter").value;
-  const category = document.getElementById("categoryFilter").value;
-  const sort = document.getElementById("sortFilter").value;
+// Filtreler: Gurme / Lezzet Mekanları (Yemek, Cafe, Tatlı vb.)
+function getFilteredFoodPlaces() {
+  const searchInput = document.getElementById("searchInput");
+  const search = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const districtSelect = document.getElementById("districtFilter");
+  const district = districtSelect ? districtSelect.value : "all";
+  const categorySelect = document.getElementById("categoryFilter");
+  const category = categorySelect ? categorySelect.value : "all";
+  const sortSelect = document.getElementById("sortFilter");
+  const sort = sortSelect ? sortSelect.value : "score-desc";
   const userFilterEl = document.getElementById("userFilter");
   const userFilter = userFilterEl ? userFilterEl.value : "all";
 
+  // Gezilecek yerler harici tüm gurme mekanları filtrele
   let filtered = places.filter(p => {
+    // Kategori filtrelemesi: Eğer kullanıcı özellikle 'Gezilecek Yer' seçmediyse gurme mekanlar görünür
+    if (category === 'all') {
+      if (p.category === 'Gezilecek Yer') return false;
+    } else if (p.category !== category) {
+      return false;
+    }
+
     const placeUser = p.addedBy === "Zeliha" ? "Zeliha" : "Fırat";
     const matchesSearch = !search || 
       p.name.toLowerCase().includes(search) ||
@@ -928,10 +994,9 @@ function getFilteredPlaces() {
       placeUser.toLowerCase().includes(search);
       
     const matchesDistrict = (district === 'all') || (p.district.toLowerCase() === district.toLowerCase());
-    const matchesCategory = (category === 'all') || (p.category === category);
     const matchesUser = (userFilter === 'all') || (placeUser === userFilter);
 
-    return matchesSearch && matchesDistrict && matchesCategory && matchesUser;
+    return matchesSearch && matchesDistrict && matchesUser;
   });
 
   // Sıralama
@@ -946,11 +1011,63 @@ function getFilteredPlaces() {
   return filtered;
 }
 
+// Filtreler: Gidilecek & Gezilecek Yerler (Tarihi Yer, Müze, Manzara, Gitmek İstenen Yerler)
+function getFilteredSightsPlaces() {
+  const searchInput = document.getElementById("sightsSearchInput");
+  const search = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const districtSelect = document.getElementById("sightsDistrictFilter");
+  const district = districtSelect ? districtSelect.value : "all";
+  const sortSelect = document.getElementById("sightsSortFilter");
+  const sort = sortSelect ? sortSelect.value : "score-desc";
+  const userFilterEl = document.getElementById("sightsUserFilter");
+  const userFilter = userFilterEl ? userFilterEl.value : "all";
+
+  // Gezilecek Yer kategorisindeki veya to_visit statüsündeki mekanlar
+  let filtered = places.filter(p => {
+    const isSight = p.category === 'Gezilecek Yer' || p.status === 'to_visit';
+    if (!isSight) return false;
+
+    const placeUser = p.addedBy === "Zeliha" ? "Zeliha" : "Fırat";
+    const matchesSearch = !search || 
+      p.name.toLowerCase().includes(search) ||
+      (p.favorite && p.favorite.toLowerCase().includes(search)) ||
+      (p.notes && p.notes.toLowerCase().includes(search)) ||
+      p.district.toLowerCase().includes(search) ||
+      placeUser.toLowerCase().includes(search);
+      
+    const matchesDistrict = (district === 'all') || (p.district.toLowerCase() === district.toLowerCase());
+    const matchesUser = (userFilter === 'all') || (placeUser === userFilter);
+
+    return matchesSearch && matchesDistrict && matchesUser;
+  });
+
+  // Sıralama
+  filtered.sort((a, b) => {
+    if (sort === "score-desc") return b.score - a.score;
+    if (sort === "score-asc") return a.score - b.score;
+    if (sort === "name-asc") return a.name.localeCompare(b.name, 'tr');
+    if (sort === "date-desc") return (b.createdAt || 0) - (a.createdAt || 0);
+    return 0;
+  });
+
+  return filtered;
+}
+
+// Aktif sekmeye göre filtrelenmiş mekanlar
+function getFilteredPlaces() {
+  if (currentTab === 'sights') {
+    return getFilteredSightsPlaces();
+  }
+  return getFilteredFoodPlaces();
+}
+
 // Mekan Kartı HTML Üretici
 function createPlaceCard(place) {
   const card = document.createElement("div");
   card.id = `card-${place.id}`;
   card.className = "theme-bg-card rounded-3xl border theme-border p-4 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:-translate-y-0.5";
+
+  const isSight = place.category === 'Gezilecek Yer' || place.status === 'to_visit';
 
   // Kategoriye göre ikon/etiket
   let catBadgeColor = "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/80";
@@ -972,6 +1089,16 @@ function createPlaceCard(place) {
     catIcon = "🍸"; 
   }
 
+  // Ziyaret Durumu Rozeti
+  let statusBadgeHtml = "";
+  if (isSight) {
+    if (place.status === 'visited') {
+      statusBadgeHtml = `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">✓ Gidildi</span>`;
+    } else {
+      statusBadgeHtml = `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 flex items-center gap-1">📌 Gidilecek</span>`;
+    }
+  }
+
   // Skor rozeti (Mavi & Yeşil Paleti)
   let scoreBadgeColor = "bg-emerald-600 text-white shadow-emerald-500/25";
   if (place.score < 7.5) scoreBadgeColor = "bg-rose-500 text-white shadow-rose-500/25";
@@ -990,6 +1117,14 @@ function createPlaceCard(place) {
     </div>
   ` : '';
 
+  // Ziyaret toggle butonu (Gidilecek yerler için)
+  const visitedActionBtn = isSight ? `
+    <button onclick="window.togglePlaceVisited('${place.id}')" class="text-xs ${place.status === 'visited' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200/50 dark:border-emerald-800/50' : 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 border-sky-200/50 dark:border-sky-800/50'} hover:opacity-85 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-xl transition border" title="Ziyaret durumunu değiştir">
+      <i data-lucide="${place.status === 'visited' ? 'check-circle-2' : 'check'}" class="w-3.5 h-3.5"></i>
+      <span>${place.status === 'visited' ? 'Gittim ✓' : 'Gittim'}</span>
+    </button>
+  ` : '';
+
   card.innerHTML = `
     <div>
       ${imageHtml}
@@ -1004,6 +1139,7 @@ function createPlaceCard(place) {
               📍 ${escapeHtml(place.district)}
             </span>
             ${getUserBadgeHtml(place.addedBy)}
+            ${statusBadgeHtml}
           </div>
           <h3 class="text-base font-extrabold theme-text-main group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition leading-snug">${escapeHtml(place.name)}</h3>
         </div>
@@ -1018,9 +1154,9 @@ function createPlaceCard(place) {
 
       ${place.favorite ? `
         <div class="mt-2.5 text-xs theme-bg-surface border theme-border p-2.5 rounded-xl">
-          <div class="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-0.5">
-            <i data-lucide="sparkles" class="w-3 h-3 text-emerald-500"></i>
-            <span>Favori / Meşhur:</span>
+          <div class="flex items-center gap-1 text-[11px] font-bold ${isSight ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'} mb-0.5">
+            <i data-lucide="sparkles" class="w-3 h-3 ${isSight ? 'text-sky-500' : 'text-emerald-500'}"></i>
+            <span>${isSight ? 'Önemli Nokta / İpucu:' : 'Favori / Meşhur:'}</span>
           </div>
           <span class="theme-text-main font-medium">${escapeHtml(place.favorite)}</span>
         </div>
@@ -1033,8 +1169,8 @@ function createPlaceCard(place) {
       ` : ''}
     </div>
 
-    <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between text-xs">
-      <div class="flex items-center gap-2">
+    <div class="mt-4 pt-3 border-t theme-border flex items-center justify-between text-xs gap-1 flex-wrap">
+      <div class="flex items-center gap-1.5 flex-wrap">
         <button onclick="window.zoomToPlace('${place.id}')" class="text-emerald-600 dark:text-emerald-400 hover:opacity-85 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl transition border border-emerald-200/50 dark:border-emerald-800/50">
           <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
           <span>Haritada</span>
@@ -1043,9 +1179,10 @@ function createPlaceCard(place) {
           <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-500"></i>
           <span class="hidden sm:inline">Git</span>
         </a>
+        ${visitedActionBtn}
       </div>
       
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 ml-auto">
         <button onclick="window.editPlace('${place.id}')" class="p-2 theme-text-muted hover:theme-text-main hover:theme-bg-surface rounded-xl transition" title="Düzenle">
           <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
         </button>
@@ -1059,58 +1196,28 @@ function createPlaceCard(place) {
   return card;
 }
 
-// Mekanları Ekrana Basma (🏛️ Gezilecek Yerler ve 🍽️ Lezzet Mekanları Ayrı Kutucuklarda)
+// Mekanları Ekrana Basma (Gurme Mekanlar & Gidilecek Yerler Bağımsız Listelenir)
 function renderPlaces() {
-  const sightsContainer = document.getElementById("sightsContainer");
-  const sightsList = document.getElementById("sightsList");
-  const sightsCountBadge = document.getElementById("sightsCountBadge");
-
+  // 1. LEZZET & GURME MEKANLARI LİSTESİ
   const foodPlacesContainer = document.getElementById("foodPlacesContainer");
   const foodPlacesList = document.getElementById("foodPlacesList");
   const foodsCountBadge = document.getElementById("foodsCountBadge");
-
   const emptyState = document.getElementById("emptyState");
-  const fallbackList = document.getElementById("placesList");
+  const placesCountBadge = document.getElementById("placesCountBadge");
 
-  const filtered = getFilteredPlaces();
+  const foodPlaces = getFilteredFoodPlaces();
 
-  if (filtered.length === 0) {
-    if (emptyState) emptyState.classList.remove("hidden");
-    if (sightsContainer) sightsContainer.classList.add("hidden");
-    if (foodPlacesContainer) foodPlacesContainer.classList.add("hidden");
-    if (fallbackList) fallbackList.innerHTML = "";
-    updateMapMarkers([]);
-    initIcons();
-    return;
-  }
+  if (foodsCountBadge) foodsCountBadge.innerText = `${foodPlaces.length} Mekan`;
+  if (placesCountBadge) placesCountBadge.innerText = foodPlaces.length;
 
-  if (emptyState) emptyState.classList.add("hidden");
-
-  // Gezilecek Yerler vs Gurme/Lezzet mekanları ayrımı
-  const sights = filtered.filter(p => p.category === 'Gezilecek Yer');
-  const foodPlaces = filtered.filter(p => p.category !== 'Gezilecek Yer');
-
-  // 1. KUTU: 🏛️ Gezilecek Yerler, Müzeler & Manzaralar
-  if (sightsContainer && sightsList) {
-    if (sights.length === 0) {
-      sightsContainer.classList.add("hidden");
-    } else {
-      sightsContainer.classList.remove("hidden");
-      if (sightsCountBadge) sightsCountBadge.innerText = `${sights.length} Yer`;
-      sightsList.innerHTML = "";
-      sights.forEach(place => {
-        sightsList.appendChild(createPlaceCard(place));
-      });
-    }
-  }
-
-  // 2. KUTU: 🍽️ Yeme, İçme & Gurme Mekanları
-  if (foodPlacesContainer && foodPlacesList) {
+  if (foodPlacesList) {
     if (foodPlaces.length === 0) {
-      foodPlacesContainer.classList.add("hidden");
+      if (emptyState) emptyState.classList.remove("hidden");
+      if (foodPlacesContainer) foodPlacesContainer.classList.add("hidden");
+      foodPlacesList.innerHTML = "";
     } else {
-      foodPlacesContainer.classList.remove("hidden");
-      if (foodsCountBadge) foodsCountBadge.innerText = `${foodPlaces.length} Mekan`;
+      if (emptyState) emptyState.classList.add("hidden");
+      if (foodPlacesContainer) foodPlacesContainer.classList.remove("hidden");
       foodPlacesList.innerHTML = "";
       foodPlaces.forEach(place => {
         foodPlacesList.appendChild(createPlaceCard(place));
@@ -1118,52 +1225,107 @@ function renderPlaces() {
     }
   }
 
-  // Geriye dönük uyumluluk: Eski tekil #placesList varsa
-  if (fallbackList && !sightsList) {
-    fallbackList.innerHTML = "";
-    filtered.forEach(place => {
-      fallbackList.appendChild(createPlaceCard(place));
-    });
+  // 2. GİDİLECEK & GEZİLECEK YERLER LİSTESİ (AYRI TAB & AYRI LİSTE)
+  const sightsDedicatedContainer = document.getElementById("sightsDedicatedContainer");
+  const sightsDedicatedList = document.getElementById("sightsDedicatedList");
+  const sightsDedicatedCountBadge = document.getElementById("sightsDedicatedCountBadge");
+  const sightsEmptyState = document.getElementById("sightsEmptyState");
+  const sightsCountBadgeDesktop = document.getElementById("sightsCountBadgeDesktop");
+
+  const sights = getFilteredSightsPlaces();
+
+  if (sightsDedicatedCountBadge) sightsDedicatedCountBadge.innerText = `${sights.length} Yer`;
+  if (sightsCountBadgeDesktop) sightsCountBadgeDesktop.innerText = sights.length;
+
+  if (sightsDedicatedList) {
+    if (sights.length === 0) {
+      if (sightsEmptyState) sightsEmptyState.classList.remove("hidden");
+      if (sightsDedicatedContainer) sightsDedicatedContainer.classList.add("hidden");
+      sightsDedicatedList.innerHTML = "";
+    } else {
+      if (sightsEmptyState) sightsEmptyState.classList.add("hidden");
+      if (sightsDedicatedContainer) sightsDedicatedContainer.classList.remove("hidden");
+      sightsDedicatedList.innerHTML = "";
+      sights.forEach(place => {
+        sightsDedicatedList.appendChild(createPlaceCard(place));
+      });
+    }
   }
 
-  updateMapMarkers(filtered);
+  // 3. Harita Pinlerini Aktif Görünüme Göre Güncelle
+  if (currentTab === 'sights') {
+    updateMapMarkers(sights);
+  } else if (currentTab === 'places') {
+    updateMapMarkers(foodPlaces);
+  } else {
+    updateMapMarkers(places);
+  }
+
   initIcons();
 }
 
-// İlçe Seçenekleri Doldur
+// İlçe Seçenekleri Doldur (Mekanlar, Gidilecek Yerler ve Rota İçin)
 function renderDistrictDropdowns() {
   const districtFilter = document.getElementById("districtFilter");
+  const sightsDistrictFilter = document.getElementById("sightsDistrictFilter");
   const routeDistrict = document.getElementById("routeDistrictSelect");
 
-  const uniqueDistricts = [...new Set(places.map(p => p.district))].sort();
+  const uniqueDistricts = [...new Set(places.map(p => p.district))].filter(Boolean).sort((a,b) => a.localeCompare(b, 'tr'));
 
-  // Filtre select
-  const currentVal = districtFilter.value;
-  districtFilter.innerHTML = '<option value="all">Tüm Bölgeler</option>';
-  uniqueDistricts.forEach(d => {
-    const opt = document.createElement("option");
-    opt.value = d;
-    opt.textContent = `${d} (${places.filter(p => p.district === d).length})`;
-    districtFilter.appendChild(opt);
-  });
-  if (uniqueDistricts.includes(currentVal)) {
-    districtFilter.value = currentVal;
+  // Lezzet mekanları filtre select
+  if (districtFilter) {
+    const currentVal = districtFilter.value;
+    districtFilter.innerHTML = '<option value="all">📍 Tüm Bölgeler</option>';
+    uniqueDistricts.forEach(d => {
+      const count = places.filter(p => p.district === d && p.category !== 'Gezilecek Yer').length;
+      if (count > 0) {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = `${d} (${count})`;
+        districtFilter.appendChild(opt);
+      }
+    });
+    if (uniqueDistricts.includes(currentVal)) {
+      districtFilter.value = currentVal;
+    }
+  }
+
+  // Gidilecek Yerler filtre select
+  if (sightsDistrictFilter) {
+    const currentSightsVal = sightsDistrictFilter.value;
+    sightsDistrictFilter.innerHTML = '<option value="all">📍 Tüm Bölgeler</option>';
+    uniqueDistricts.forEach(d => {
+      const count = places.filter(p => p.district === d && (p.category === 'Gezilecek Yer' || p.status === 'to_visit')).length;
+      if (count > 0) {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = `${d} (${count})`;
+        sightsDistrictFilter.appendChild(opt);
+      }
+    });
+    if (uniqueDistricts.includes(currentSightsVal)) {
+      sightsDistrictFilter.value = currentSightsVal;
+    }
   }
 
   // Rota ilçe select
-  routeDistrict.innerHTML = '<option value="all">🌐 Tüm İstanbul (Semt Bağımsız Rota)</option>';
-  if (uniqueDistricts.length === 0) {
-    routeDistrict.innerHTML += '<option value="">Henüz mekan yok</option>';
-  } else {
-    uniqueDistricts.forEach(d => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = `📍 ${d} (${places.filter(p => p.district === d).length} Mekan)`;
-      routeDistrict.appendChild(opt);
-    });
-    // Kadıköy varsa varsayılan yap
-    if (uniqueDistricts.includes("Kadıköy")) {
-      routeDistrict.value = "Kadıköy";
+  if (routeDistrict) {
+    const currentRouteVal = routeDistrict.value;
+    routeDistrict.innerHTML = '<option value="all">🌐 Tüm İstanbul (Semt Bağımsız Rota)</option>';
+    if (uniqueDistricts.length === 0) {
+      routeDistrict.innerHTML += '<option value="">Henüz mekan yok</option>';
+    } else {
+      uniqueDistricts.forEach(d => {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = `📍 ${d} (${places.filter(p => p.district === d).length} Mekan)`;
+        routeDistrict.appendChild(opt);
+      });
+      if (currentRouteVal && (currentRouteVal === 'all' || uniqueDistricts.includes(currentRouteVal))) {
+        routeDistrict.value = currentRouteVal;
+      } else if (uniqueDistricts.includes("Kadıköy")) {
+        routeDistrict.value = "Kadıköy";
+      }
     }
   }
 
@@ -1464,8 +1626,12 @@ window.zoomToPlace = function(id) {
 };
 
 window.focusPlaceCard = function(id) {
-  // Mekanlar sekmesine geç
-  switchTab('places');
+  const place = places.find(p => p.id === id);
+  if (place && (place.category === 'Gezilecek Yer' || place.status === 'to_visit')) {
+    switchTab('sights');
+  } else {
+    switchTab('places');
+  }
   setTimeout(() => {
     const card = document.getElementById(`card-${id}`);
     if (card) {
@@ -1473,7 +1639,7 @@ window.focusPlaceCard = function(id) {
       card.classList.add("ring-2", "ring-emerald-500");
       setTimeout(() => card.classList.remove("ring-2", "ring-emerald-500"), 2000);
     }
-  }, 100);
+  }, 120);
 };
 
 window.deletePlace = function(id) {
@@ -1529,42 +1695,65 @@ function switchTab(tab) {
   
   // Elementler
   const tabPlacesBtn = document.getElementById("tabPlaces");
+  const tabSightsBtn = document.getElementById("tabSights");
   const tabRouteBtn = document.getElementById("tabRoute");
+
   const viewPlaces = document.getElementById("viewPlaces");
+  const viewSights = document.getElementById("viewSights");
   const viewRoute = document.getElementById("viewRoute");
+
   const leftCol = document.getElementById("leftColumnContainer");
   const rightCol = document.getElementById("rightMapContainer");
 
   // Mobil Segment Butonları
   const mTabPlaces = document.getElementById("mobileTabPlaces");
+  const mTabSights = document.getElementById("mobileTabSights");
   const mTabMap = document.getElementById("mobileTabMap");
   const mTabRoute = document.getElementById("mobileTabRoute");
 
   // Alt Bar Butonları
   const bNavPlaces = document.getElementById("bottomNavPlaces");
+  const bNavSights = document.getElementById("bottomNavSights");
   const bNavMap = document.getElementById("bottomNavMap");
   const bNavRoute = document.getElementById("bottomNavRoute");
 
   const isMobile = window.innerWidth < 1024;
 
   const resetStyles = () => {
-    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
-    if (mTabMap) mTabMap.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
-    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-semibold rounded-xl transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1.5";
+    // Masaüstü sekmeler
+    const desktopInactive = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-1.5";
+    if (tabPlacesBtn) tabPlacesBtn.className = desktopInactive;
+    if (tabSightsBtn) tabSightsBtn.className = desktopInactive;
+    if (tabRouteBtn) tabRouteBtn.className = desktopInactive;
+
+    // Mobil segment butonları
+    const mobileInactive = "py-2 text-xs font-semibold rounded-lg transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1";
+    if (mTabPlaces) mTabPlaces.className = mobileInactive;
+    if (mTabSights) mTabSights.className = mobileInactive;
+    if (mTabMap) mTabMap.className = mobileInactive;
+    if (mTabRoute) mTabRoute.className = mobileInactive;
     
-    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
-    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
-    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]";
+    // Alt bar butonları
+    const bottomInactive = "flex flex-col items-center gap-0.5 theme-text-muted font-semibold text-[10px]";
+    if (bNavPlaces) bNavPlaces.className = bottomInactive;
+    if (bNavSights) bNavSights.className = bottomInactive;
+    if (bNavMap) bNavMap.className = bottomInactive;
+    if (bNavRoute) bNavRoute.className = bottomInactive;
   };
 
   resetStyles();
 
+  const desktopActive = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-1.5";
+  const mobileActive = "py-2 text-xs font-bold rounded-lg transition text-slate-900 dark:text-white theme-bg-card shadow-sm flex items-center justify-center gap-1";
+
   if (tab === 'places') {
-    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-2";
-    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-2";
-    
-    viewPlaces.classList.remove("hidden");
-    viewRoute.classList.add("hidden");
+    if (tabPlacesBtn) tabPlacesBtn.className = desktopActive;
+    if (mTabPlaces) mTabPlaces.className = mobileActive;
+    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]";
+
+    if (viewPlaces) viewPlaces.classList.remove("hidden");
+    if (viewSights) viewSights.classList.add("hidden");
+    if (viewRoute) viewRoute.classList.add("hidden");
 
     if (leftCol) leftCol.classList.remove("hidden");
     if (rightCol) {
@@ -1572,27 +1761,46 @@ function switchTab(tab) {
       else rightCol.classList.remove("hidden");
     }
 
-    if (mTabPlaces) mTabPlaces.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavPlaces) bNavPlaces.className = "flex flex-col items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]";
+    if (routePolyline) {
+      map.removeLayer(routePolyline);
+      routePolyline = null;
+    }
+    updateMapMarkers(getFilteredFoodPlaces());
+    const note = document.getElementById("activeMapFilterNote");
+    if (note) note.innerText = "Lezzet Mekanları";
+  } else if (tab === 'sights') {
+    if (tabSightsBtn) tabSightsBtn.className = desktopActive;
+    if (mTabSights) mTabSights.className = mobileActive;
+    if (bNavSights) bNavSights.className = "flex flex-col items-center gap-0.5 text-sky-600 dark:text-sky-400 font-bold text-[10px]";
+
+    if (viewPlaces) viewPlaces.classList.add("hidden");
+    if (viewSights) viewSights.classList.remove("hidden");
+    if (viewRoute) viewRoute.classList.add("hidden");
+
+    if (leftCol) leftCol.classList.remove("hidden");
+    if (rightCol) {
+      if (isMobile) rightCol.classList.add("hidden");
+      else rightCol.classList.remove("hidden");
+    }
 
     if (routePolyline) {
       map.removeLayer(routePolyline);
       routePolyline = null;
     }
-    updateMapMarkers(getFilteredPlaces());
-    document.getElementById("activeMapFilterNote").innerText = "Tüm Mekanlar";
+    updateMapMarkers(getFilteredSightsPlaces());
+    const note = document.getElementById("activeMapFilterNote");
+    if (note) note.innerText = "Gidilecek Yerler";
   } else if (tab === 'map') {
-    // Sadece mobilde tam ekran harita
+    // Sadece mobilde harita tam ekran görünümü
     if (leftCol && isMobile) leftCol.classList.add("hidden");
     if (rightCol) {
       rightCol.classList.remove("hidden");
       rightCol.style.display = "flex";
     }
 
-    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card text-sky-600 dark:text-sky-400 shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-1 text-sky-600 dark:text-sky-400 font-bold text-[10px]";
+    if (mTabMap) mTabMap.className = "py-2 text-xs font-bold rounded-lg transition theme-bg-card text-indigo-600 dark:text-indigo-400 shadow-sm flex items-center justify-center gap-1";
+    if (bNavMap) bNavMap.className = "flex flex-col items-center gap-0.5 text-indigo-600 dark:text-indigo-400 font-bold text-[10px]";
 
-    // Haritayı hemen ve 150ms sonra tekrar tazele
     const refreshMap = () => {
       if (map) {
         map.invalidateSize();
@@ -1612,21 +1820,21 @@ function switchTab(tab) {
     setTimeout(refreshMap, 150);
     setTimeout(refreshMap, 350);
   } else if (tab === 'route') {
-    if (tabRouteBtn) tabRouteBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-2";
-    if (tabPlacesBtn) tabPlacesBtn.className = "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-2";
-    
-    viewRoute.classList.remove("hidden");
-    viewPlaces.classList.add("hidden");
+    if (tabRouteBtn) tabRouteBtn.className = desktopActive;
+    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-lg transition theme-bg-card text-teal-600 dark:text-teal-400 shadow-sm flex items-center justify-center gap-1";
+    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-0.5 text-teal-600 dark:text-teal-400 font-bold text-[10px]";
+
+    if (viewRoute) viewRoute.classList.remove("hidden");
+    if (viewPlaces) viewPlaces.classList.add("hidden");
+    if (viewSights) viewSights.classList.add("hidden");
 
     if (leftCol) leftCol.classList.remove("hidden");
     if (rightCol) {
       if (isMobile) rightCol.classList.add("hidden");
       else rightCol.classList.remove("hidden");
     }
-
-    if (mTabRoute) mTabRoute.className = "py-2 text-xs font-bold rounded-xl transition theme-bg-card text-emerald-600 dark:text-emerald-400 shadow-sm flex items-center justify-center gap-1.5";
-    if (bNavRoute) bNavRoute.className = "flex flex-col items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]";
   }
+
   initIcons();
 }
 
@@ -1635,12 +1843,16 @@ function setupEventListeners() {
   // Masaüstü Sekmeler
   const tabPlaces = document.getElementById("tabPlaces");
   if (tabPlaces) tabPlaces.addEventListener("click", () => switchTab('places'));
+  const tabSights = document.getElementById("tabSights");
+  if (tabSights) tabSights.addEventListener("click", () => switchTab('sights'));
   const tabRoute = document.getElementById("tabRoute");
   if (tabRoute) tabRoute.addEventListener("click", () => switchTab('route'));
 
   // Mobil Segment Butonları
   const mTabPlaces = document.getElementById("mobileTabPlaces");
   if (mTabPlaces) mTabPlaces.addEventListener("click", () => switchTab('places'));
+  const mTabSights = document.getElementById("mobileTabSights");
+  if (mTabSights) mTabSights.addEventListener("click", () => switchTab('sights'));
   const mTabMap = document.getElementById("mobileTabMap");
   if (mTabMap) mTabMap.addEventListener("click", () => switchTab('map'));
   const mTabRoute = document.getElementById("mobileTabRoute");
@@ -1649,38 +1861,75 @@ function setupEventListeners() {
   // Mobil Alt Bar Butonları
   const bNavPlaces = document.getElementById("bottomNavPlaces");
   if (bNavPlaces) bNavPlaces.addEventListener("click", () => switchTab('places'));
-  const bNavMap = document.getElementById("bottomNavMap");
-  if (bNavMap) bNavMap.addEventListener("click", () => switchTab('map'));
+  const bNavSights = document.getElementById("bottomNavSights");
+  if (bNavSights) bNavSights.addEventListener("click", () => switchTab('sights'));
   const bNavAdd = document.getElementById("bottomNavAdd");
   if (bNavAdd) bNavAdd.addEventListener("click", () => {
-    openNewPlaceModalDirect();
+    openNewPlaceModalDirect(currentTab === 'sights' ? 'Gezilecek Yer' : 'Yemek');
   });
+  const bNavMap = document.getElementById("bottomNavMap");
+  if (bNavMap) bNavMap.addEventListener("click", () => switchTab('map'));
   const bNavRoute = document.getElementById("bottomNavRoute");
   if (bNavRoute) bNavRoute.addEventListener("click", () => switchTab('route'));
 
-  // Arama Temizle Butonu
+  // Mekanlar Arama ve Temizleme
   const clearPlacesBtn = document.getElementById("clearPlacesSearchBtn");
   const searchInput = document.getElementById("searchInput");
-  if (searchInput && clearPlacesBtn) {
+  if (searchInput) {
     searchInput.addEventListener("input", (e) => {
-      if (e.target.value.length > 0) clearPlacesBtn.classList.remove("hidden");
-      else clearPlacesBtn.classList.add("hidden");
+      if (clearPlacesBtn) {
+        if (e.target.value.length > 0) clearPlacesBtn.classList.remove("hidden");
+        else clearPlacesBtn.classList.add("hidden");
+      }
       renderPlaces();
     });
-    clearPlacesBtn.addEventListener("click", () => {
-      searchInput.value = "";
-      clearPlacesBtn.classList.add("hidden");
-      renderPlaces();
-      searchInput.focus();
-    });
+    if (clearPlacesBtn) {
+      clearPlacesBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        clearPlacesBtn.classList.add("hidden");
+        renderPlaces();
+        searchInput.focus();
+      });
+    }
   }
 
-  // Filtreler
-  document.getElementById("districtFilter").addEventListener("change", renderPlaces);
-  document.getElementById("categoryFilter").addEventListener("change", renderPlaces);
-  document.getElementById("sortFilter").addEventListener("change", renderPlaces);
+  // Gidilecek Yerler Arama ve Temizleme
+  const clearSightsBtn = document.getElementById("clearSightsSearchBtn");
+  const sightsSearchInput = document.getElementById("sightsSearchInput");
+  if (sightsSearchInput) {
+    sightsSearchInput.addEventListener("input", (e) => {
+      if (clearSightsBtn) {
+        if (e.target.value.length > 0) clearSightsBtn.classList.remove("hidden");
+        else clearSightsBtn.classList.add("hidden");
+      }
+      renderPlaces();
+    });
+    if (clearSightsBtn) {
+      clearSightsBtn.addEventListener("click", () => {
+        sightsSearchInput.value = "";
+        clearSightsBtn.classList.add("hidden");
+        renderPlaces();
+        sightsSearchInput.focus();
+      });
+    }
+  }
 
-  document.getElementById("generateRouteBtn").addEventListener("click", generateRoute);
+  // Filtreler (Mekanlar)
+  const dFilter = document.getElementById("districtFilter");
+  if (dFilter) dFilter.addEventListener("change", renderPlaces);
+  const cFilter = document.getElementById("categoryFilter");
+  if (cFilter) cFilter.addEventListener("change", renderPlaces);
+  const sFilter = document.getElementById("sortFilter");
+  if (sFilter) sFilter.addEventListener("change", renderPlaces);
+
+  // Filtreler (Gidilecek Yerler)
+  const sdFilter = document.getElementById("sightsDistrictFilter");
+  if (sdFilter) sdFilter.addEventListener("change", renderPlaces);
+  const ssFilter = document.getElementById("sightsSortFilter");
+  if (ssFilter) ssFilter.addEventListener("change", renderPlaces);
+
+  const genRouteBtn = document.getElementById("generateRouteBtn");
+  if (genRouteBtn) genRouteBtn.addEventListener("click", generateRoute);
 
   // Rota Modu Değiştirme (Otomatik vs Özel Mekan Seçimi)
   const modeAutoBtn = document.getElementById("routeModeAuto");
@@ -1719,16 +1968,20 @@ function setupEventListeners() {
   // Puan slider senkronizasyonu
   const scoreSlider = document.getElementById("modalPlaceScore");
   const scoreDisplay = document.getElementById("ratingDisplayValue");
-  scoreSlider.addEventListener("input", (e) => {
-    scoreDisplay.innerText = Number(e.target.value).toFixed(1);
-  });
+  if (scoreSlider && scoreDisplay) {
+    scoreSlider.addEventListener("input", (e) => {
+      scoreDisplay.innerText = Number(e.target.value).toFixed(1);
+    });
+  }
 
   // Modal Aç/Kapa
   const openPlaceBtn = document.getElementById("openNewPlaceModal");
-  if (openPlaceBtn) openPlaceBtn.addEventListener("click", openNewPlaceModalDirect);
+  if (openPlaceBtn) openPlaceBtn.addEventListener("click", () => openNewPlaceModalDirect(currentTab === 'sights' ? 'Gezilecek Yer' : 'Yemek'));
 
-  document.getElementById("closeModalBtn").addEventListener("click", closeModal);
-  document.getElementById("cancelModalBtn").addEventListener("click", closeModal);
+  const closeBtn = document.getElementById("closeModalBtn");
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+  const cancelBtn = document.getElementById("cancelModalBtn");
+  if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
 
   // Google Maps ve Hızlı Arama
   setupQuickSearch();
@@ -1737,41 +1990,64 @@ function setupEventListeners() {
   setupImageUpload();
 
   // Form submit
-  document.getElementById("placeForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    savePlaceFromModal();
-  });
+  const placeForm = document.getElementById("placeForm");
+  if (placeForm) {
+    placeForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      savePlaceFromModal();
+    });
+  }
 
   // Haritayı ortala
-  document.getElementById("recenterMapBtn").addEventListener("click", () => {
-    const filtered = getFilteredPlaces();
-    updateMapMarkers(filtered);
-  });
+  const recenterBtn = document.getElementById("recenterMapBtn");
+  if (recenterBtn) {
+    recenterBtn.addEventListener("click", () => {
+      const filtered = getFilteredPlaces();
+      updateMapMarkers(filtered);
+    });
+  }
 
   // Dışa / İçe aktar
-  document.getElementById("exportBtn").addEventListener("click", exportData);
-  document.getElementById("importBtnTrigger").addEventListener("click", () => {
-    document.getElementById("importInput").click();
-  });
-  document.getElementById("importInput").addEventListener("change", importData);
+  const exportBtn = document.getElementById("exportBtn");
+  if (exportBtn) exportBtn.addEventListener("click", exportData);
+  const importTrigger = document.getElementById("importBtnTrigger");
+  const importInput = document.getElementById("importInput");
+  if (importTrigger && importInput) {
+    importTrigger.addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", importData);
+  }
 
   // Rotayı kopyala
-  document.getElementById("copyRouteBtn").addEventListener("click", copyRouteToClipboard);
+  const copyBtn = document.getElementById("copyRouteBtn");
+  if (copyBtn) copyBtn.addEventListener("click", copyRouteToClipboard);
 }
 
-function openNewPlaceModalDirect() {
+function openNewPlaceModalDirect(initialCategory) {
   const form = document.getElementById("placeForm");
   if (form) form.reset();
   
   const idInput = document.getElementById("placeId");
   if (idInput) idInput.value = "";
   
+  const targetCategory = initialCategory || (currentTab === 'sights' ? 'Gezilecek Yer' : 'Yemek');
+
   const title = document.getElementById("modalTitle");
-  if (title) title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-emerald-600"></i><span>Yeni Mekan Ekle</span>`;
+  if (title) {
+    if (targetCategory === "Gezilecek Yer") {
+      title.innerHTML = `<i data-lucide="landmark" class="w-5 h-5 text-sky-500"></i><span>Yeni Gidilecek Yer Ekle</span>`;
+    } else {
+      title.innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-emerald-600"></i><span>Yeni Mekan Ekle</span>`;
+    }
+  }
 
   // Son seçilen kullanıcıyı (Fırat veya Zeliha) yükle
   const lastUser = localStorage.getItem("gezi_last_user") || "Fırat";
   window.selectPlaceUser(lastUser);
+
+  const catInput = document.getElementById("modalPlaceCategory");
+  if (catInput) {
+    catInput.value = targetCategory;
+  }
   
   const displayVal = document.getElementById("ratingDisplayValue");
   if (displayVal) displayVal.innerText = "9.0";

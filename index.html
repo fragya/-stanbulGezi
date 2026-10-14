@@ -369,18 +369,22 @@
     </div>
   </div>
 
-  <!-- Mobil Görünüm Segment Kontrolü (Mekanlar / Harita / Rota) -->
-  <div class="lg:hidden sticky top-16 z-30 theme-bg-card/95 backdrop-blur-md border-b theme-border px-4 py-2.5">
-    <div class="grid grid-cols-3 gap-1 theme-bg-surface p-1 rounded-xl">
-      <button id="mobileTabPlaces" class="py-2 text-xs font-bold rounded-lg transition text-slate-900 theme-bg-card shadow-sm flex items-center justify-center gap-1.5">
-        <i data-lucide="list" class="w-3.5 h-3.5 text-emerald-600"></i>
+  <!-- Mobil Görünüm Segment Kontrolü (Mekanlar / Gidilecek / Harita / Rota) -->
+  <div class="lg:hidden sticky top-16 z-30 theme-bg-card/95 backdrop-blur-md border-b theme-border px-3 py-2">
+    <div class="grid grid-cols-4 gap-1 theme-bg-surface p-1 rounded-xl">
+      <button id="mobileTabPlaces" class="py-2 text-xs font-bold rounded-lg transition text-slate-900 theme-bg-card shadow-sm flex items-center justify-center gap-1">
+        <i data-lucide="utensils" class="w-3.5 h-3.5 text-emerald-600"></i>
         <span>Mekanlar</span>
       </button>
-      <button id="mobileTabMap" class="py-2 text-xs font-bold rounded-lg transition theme-text-muted flex items-center justify-center gap-1.5">
-        <i data-lucide="map" class="w-3.5 h-3.5 text-sky-500"></i>
+      <button id="mobileTabSights" class="py-2 text-xs font-semibold rounded-lg transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1">
+        <i data-lucide="landmark" class="w-3.5 h-3.5 text-sky-500"></i>
+        <span>Gidilecek</span>
+      </button>
+      <button id="mobileTabMap" class="py-2 text-xs font-semibold rounded-lg transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1">
+        <i data-lucide="map" class="w-3.5 h-3.5 text-indigo-500"></i>
         <span>Harita</span>
       </button>
-      <button id="mobileTabRoute" class="py-2 text-xs font-bold rounded-lg transition theme-text-muted flex items-center justify-center gap-1.5">
+      <button id="mobileTabRoute" class="py-2 text-xs font-semibold rounded-lg transition theme-text-muted hover:theme-text-main flex items-center justify-center gap-1">
         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-teal-500"></i>
         <span>Rota</span>
       </button>
@@ -396,12 +400,17 @@
       <!-- Desktop Sekmeler & Özet Barı -->
       <div class="theme-bg-card rounded-2xl p-3 sm:p-4 border theme-border shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div class="hidden lg:flex space-x-1 theme-bg-surface p-1 rounded-xl">
-          <button id="tabPlaces" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-2">
-            <i data-lucide="map-pin" class="w-4 h-4 text-emerald-600"></i>
+          <button id="tabPlaces" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition theme-bg-card theme-text-main shadow-sm flex items-center gap-1.5">
+            <i data-lucide="utensils" class="w-4 h-4 text-emerald-600"></i>
             <span>Mekanlarım</span>
             <span id="placesCountBadge" class="bg-emerald-500/10 text-emerald-600 text-xs px-2 py-0.5 rounded-full font-extrabold border border-emerald-500/20">0</span>
           </button>
-          <button id="tabRoute" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-2">
+          <button id="tabSights" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-1.5">
+            <i data-lucide="landmark" class="w-4 h-4 text-sky-500"></i>
+            <span>Gidilecek Yerler</span>
+            <span id="sightsCountBadgeDesktop" class="bg-sky-500/10 text-sky-600 text-xs px-2 py-0.5 rounded-full font-extrabold border border-sky-500/20">0</span>
+          </button>
+          <button id="tabRoute" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold theme-text-muted hover:theme-text-main transition flex items-center gap-1.5">
             <i data-lucide="sparkles" class="w-4 h-4 text-teal-500"></i>
             <span>Günün Rotası</span>
           </button>
@@ -479,32 +488,7 @@
 
         </div>
 
-        <!-- KUTU 1: 🏛️ GEZİLECEK YERLER, MÜZELER & SEYİR NOKTALARI (AYRI KUTUCUK) -->
-        <div id="sightsContainer" class="theme-bg-card rounded-3xl p-4 sm:p-5 border theme-border shadow-sm space-y-3.5 transition-all">
-          <div class="flex items-center justify-between pb-2.5 border-b theme-border">
-            <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold shadow-xs">
-                <i data-lucide="landmark" class="w-4 h-4"></i>
-              </div>
-              <div>
-                <h3 class="text-sm sm:text-base font-extrabold theme-text-main flex items-center gap-1.5">
-                  <span>🏛️ Gezilecek Yerler & Manzaralar</span>
-                </h3>
-                <p class="text-[11px] theme-text-muted">Tarihi yapılar, müzeler, seyir terasları ve sahiller</p>
-              </div>
-            </div>
-            <span id="sightsCountBadge" class="text-xs font-black text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-xl border border-sky-500/20">
-              0 Yer
-            </span>
-          </div>
-
-          <!-- Gezilecek Yerler Kartları -->
-          <div id="sightsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- JS ile dinamik doldurulur -->
-          </div>
-        </div>
-
-        <!-- KUTU 2: 🍽️ YEME, İÇME & GURME LEZZET MEKANLARI (AYRI KUTUCUK) -->
+        <!-- YEME, İÇME & GURME LEZZET MEKANLARI (MEKANLAR LİSTESİ) -->
         <div id="foodPlacesContainer" class="theme-bg-card rounded-3xl p-4 sm:p-5 border theme-border shadow-sm space-y-3.5 transition-all">
           <div class="flex items-center justify-between pb-2.5 border-b theme-border">
             <div class="flex items-center gap-2.5">
@@ -529,13 +513,111 @@
           </div>
         </div>
 
-        <!-- Boş Durum Görseli -->
+        <!-- Boş Durum Görseli (Mekanlar için) -->
         <div id="emptyState" class="hidden text-center py-14 theme-bg-card rounded-3xl border border-dashed theme-border p-6">
           <div class="w-16 h-16 bg-emerald-500/10 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
             <i data-lucide="map-pin-off" class="w-8 h-8"></i>
           </div>
-          <h3 class="text-base font-bold theme-text-main">Henüz mekan bulunamadı</h3>
+          <h3 class="text-base font-bold theme-text-main">Henüz lezzet mekanı bulunamadı</h3>
           <p class="text-xs theme-text-muted mt-1 max-w-sm mx-auto">Arama kriterlerinizi sıfırlayabilir veya sağ üstteki butondan yeni mekan ekleyebilirsiniz.</p>
+          <button type="button" onclick="window.openNewPlaceModalDirect('Yemek')" class="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition active:scale-95 inline-flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Yeni Mekan Ekle</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- VIEW 3: Gidilecek Yerler & Gezi Noktaları Paneli (AYRI LİSTE) -->
+      <div id="viewSights" class="hidden flex flex-col gap-4">
+        
+        <!-- Arama ve Filtre Kartı (Gidilecek Yerler için) -->
+        <div class="theme-bg-card rounded-2xl p-4 border theme-border shadow-sm space-y-3">
+          
+          <!-- Hızlı Arama Input -->
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3.5 theme-text-muted"></i>
+            <input type="text" id="sightsSearchInput" placeholder="Gidilecek yer adı, semt veya gezi notu ara..." class="w-full pl-10 pr-10 py-2.5 theme-bg-surface border theme-border rounded-xl text-xs sm:text-sm focus:outline-none focus:border-sky-500 transition" />
+            <button id="clearSightsSearchBtn" class="hidden absolute right-3 top-3 theme-text-muted hover:theme-text-main">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Kullanıcı (Fırat / Zeliha) Hızlı Filtre Sekmeleri -->
+          <div class="flex items-center justify-between gap-2 pt-0.5">
+            <div class="flex items-center gap-1.5 theme-bg-surface p-1 rounded-xl border theme-border w-full sm:w-auto">
+              <button type="button" id="sightsUserPillAll" onclick="window.setSightsUserFilter('all')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-extrabold transition theme-bg-card theme-text-main shadow-sm flex items-center justify-center gap-1.5">
+                <span>👥 Tümü</span>
+              </button>
+              <button type="button" id="sightsUserPillFirat" onclick="window.setSightsUserFilter('Fırat')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-sky-600 text-white text-[10px] font-black flex items-center justify-center">F</span>
+                <span>Fırat</span>
+              </button>
+              <button type="button" id="sightsUserPillZeliha" onclick="window.setSightsUserFilter('Zeliha')" class="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold theme-text-muted hover:theme-text-main transition flex items-center justify-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">Z</span>
+                <span>Zeliha</span>
+              </button>
+            </div>
+            <input type="hidden" id="sightsUserFilter" value="all" />
+
+            <!-- Yeni Gidilecek Yer Ekle Butonu -->
+            <button type="button" onclick="window.openNewPlaceModalDirect('Gezilecek Yer')" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-md shadow-sky-500/20 transition active:scale-95">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Gidilecek Yer Ekle</span>
+            </button>
+          </div>
+
+          <!-- Bölge & Sıralama Çipleri (Yatay Kaydırma) -->
+          <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 text-xs">
+            <select id="sightsDistrictFilter" class="theme-bg-surface border theme-border rounded-xl px-3 py-2 text-xs font-semibold theme-text-main focus:outline-none focus:border-sky-500 shrink-0">
+              <option value="all">📍 Tüm Bölgeler</option>
+            </select>
+
+            <select id="sightsSortFilter" class="theme-bg-surface border theme-border rounded-xl px-3 py-2 text-xs font-semibold theme-text-main focus:outline-none focus:border-sky-500 shrink-0">
+              <option value="score-desc">★ En Yüksek Puan</option>
+              <option value="name-asc">A-Z Alfabetik</option>
+              <option value="date-desc">En Yeni Eklenen</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Gidilecek Yerler Kutusu (Ayrı Liste) -->
+        <div id="sightsDedicatedContainer" class="theme-bg-card rounded-3xl p-4 sm:p-5 border theme-border shadow-sm space-y-3.5 transition-all">
+          <div class="flex items-center justify-between pb-2.5 border-b theme-border">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold shadow-xs">
+                <i data-lucide="landmark" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm sm:text-base font-extrabold theme-text-main flex items-center gap-1.5">
+                  <span>🏛️ Gidilecek & Gezilecek Yerler</span>
+                </h3>
+                <p class="text-[11px] theme-text-muted">Tarihi yapılar, müzeler, seyir terasları, sahiller ve gitmek istediğiniz noktalar</p>
+              </div>
+            </div>
+            <span id="sightsDedicatedCountBadge" class="text-xs font-black text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-xl border border-sky-500/20">
+              0 Yer
+            </span>
+          </div>
+
+          <!-- Gidilecek Yerler Kartları -->
+          <div id="sightsDedicatedList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- JS ile dinamik doldurulur -->
+          </div>
+        </div>
+
+        <!-- Boş Durum Görseli (Gidilecek Yerler için) -->
+        <div id="sightsEmptyState" class="hidden text-center py-14 theme-bg-card rounded-3xl border border-dashed theme-border p-6">
+          <div class="w-16 h-16 bg-sky-500/10 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+            <i data-lucide="landmark" class="w-8 h-8"></i>
+          </div>
+          <h3 class="text-base font-bold theme-text-main">Henüz gidilecek yer eklenmedi</h3>
+          <p class="text-xs theme-text-muted mt-1 max-w-sm mx-auto">Tarihi noktalar, müzeler, seyir terasları veya gitmek istediğiniz gezi noktalarını ekleyebilirsiniz.</p>
+          <button type="button" onclick="window.openNewPlaceModalDirect('Gezilecek Yer')" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-md shadow-sky-500/20 transition active:scale-95 inline-flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Gidilecek Yer Ekle</span>
+          </button>
         </div>
 
       </div>
@@ -993,14 +1075,14 @@
   </div>
 
   <!-- Mobil Alt Sabit Navigasyon Barı (Mobil Deneyimi Zirveye Taşıyan Alt Menü) -->
-  <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 theme-bg-card/95 backdrop-blur-xl border-t theme-border px-4 py-2 flex items-center justify-around safe-bottom">
-    <button id="bottomNavPlaces" class="flex flex-col items-center gap-1 text-emerald-600 font-bold text-[10px]">
-      <i data-lucide="compass" class="w-5 h-5"></i>
+  <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 theme-bg-card/95 backdrop-blur-xl border-t theme-border px-3 py-1.5 flex items-center justify-around safe-bottom">
+    <button id="bottomNavPlaces" class="flex flex-col items-center gap-0.5 text-emerald-600 font-bold text-[10px]">
+      <i data-lucide="utensils" class="w-5 h-5"></i>
       <span>Mekanlar</span>
     </button>
-    <button id="bottomNavMap" class="flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]">
-      <i data-lucide="map" class="w-5 h-5"></i>
-      <span>Harita</span>
+    <button id="bottomNavSights" class="flex flex-col items-center gap-0.5 theme-text-muted font-semibold text-[10px]">
+      <i data-lucide="landmark" class="w-5 h-5"></i>
+      <span>Gidilecek</span>
     </button>
     <button id="bottomNavAdd" class="flex flex-col items-center -mt-5">
       <div class="w-12 h-12 rounded-full theme-gradient-btn text-white flex items-center justify-center shadow-lg shadow-emerald-500/40 ring-4 ring-white dark:ring-slate-900 active:scale-90 transition">
@@ -1008,7 +1090,11 @@
       </div>
       <span class="text-[10px] font-bold theme-text-main mt-0.5">Ekle</span>
     </button>
-    <button id="bottomNavRoute" class="flex flex-col items-center gap-1 theme-text-muted font-semibold text-[10px]">
+    <button id="bottomNavMap" class="flex flex-col items-center gap-0.5 theme-text-muted font-semibold text-[10px]">
+      <i data-lucide="map" class="w-5 h-5"></i>
+      <span>Harita</span>
+    </button>
+    <button id="bottomNavRoute" class="flex flex-col items-center gap-0.5 theme-text-muted font-semibold text-[10px]">
       <i data-lucide="sparkles" class="w-5 h-5"></i>
       <span>Rota</span>
     </button>
