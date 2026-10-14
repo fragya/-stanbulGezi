@@ -106,32 +106,6 @@ const DEFAULT_PLACES = [
     lat: 41.0440,
     lng: 29.0030,
     createdAt: Date.now() - 25000
-  },
-  {
-    id: "p8",
-    name: "Galata Kulesi & Meydanı",
-    district: "Beyoğlu",
-    category: "Gezilecek Yer",
-    score: 9.6,
-    addedBy: "Zeliha",
-    favorite: "Tarihi Kule Manzarası & Galata Sokakları Yürüyüşü",
-    notes: "Gün batımında tarihi yarımada ve Boğaz manzarası büyüleyici.",
-    lat: 41.0256,
-    lng: 28.9741,
-    createdAt: Date.now() - 10000
-  },
-  {
-    id: "p9",
-    name: "Moda Sahili & İskele Parkı",
-    district: "Moda",
-    category: "Gezilecek Yer",
-    score: 9.5,
-    addedBy: "Zeliha",
-    favorite: "Sahil Yürüyüşü, Çimlerde Oturma, Tarihi İskele",
-    notes: "Kadıköy turunun vazgeçilmez açık hava ve dinlenme noktası.",
-    lat: 40.9790,
-    lng: 29.0250,
-    createdAt: Date.now()
   }
 ];
 
@@ -430,7 +404,7 @@ function openDB() {
 }
 
 async function idbSaveAllPlaces(placesArray) {
-  if (!Array.isArray(placesArray) || placesArray.length === 0) return false;
+  if (!Array.isArray(placesArray)) return false;
   try {
     const db = await openDB();
     if (!db) return false;
@@ -456,13 +430,33 @@ async function idbLoadAllPlaces() {
       const tx = db.transaction([STORE_NAME], "readonly");
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
-      req.onsuccess = () => resolve(req.result && req.result.length > 0 ? req.result : null);
+      req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : null);
       req.onerror = () => resolve(null);
     });
   } catch (err) {
     console.warn("IndexedDB okuma hatası:", err);
     return null;
   }
+}
+
+// Silinen mekanların ID listesini kalıcı tut (Silinenlerin tekrar hortlamasını engeller)
+function getDeletedPlaceIds() {
+  try {
+    const raw = localStorage.getItem("gezi_deleted_ids");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch (_) {}
+  return new Set();
+}
+
+function markPlaceDeleted(id) {
+  const set = getDeletedPlaceIds();
+  set.add(id);
+  try {
+    localStorage.setItem("gezi_deleted_ids", JSON.stringify([...set]));
+  } catch (_) {}
 }
 
 // Tarayıcıdan kalıcı saklama izni iste (Otomatik önbellek temizliğini ve silinmeyi önler)
@@ -574,13 +568,15 @@ async function loadPlaces() {
   // 2. IndexedDB kalıcı veritabanından oku
   const idbPlaces = await idbLoadAllPlaces();
 
+  const deletedIds = getDeletedPlaceIds();
+
   // 3. Yerel depolamayı (localStorage & backup & session) oku
   let localData = null;
   try {
     const raw = localStorage.getItem("istanbul_gezi_places");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) localData = parsed;
+      if (Array.isArray(parsed)) localData = parsed;
     }
   } catch (_) {}
 
@@ -589,7 +585,7 @@ async function loadPlaces() {
       const backupRaw = localStorage.getItem("istanbul_gezi_places_backup");
       if (backupRaw) {
         const parsedBackup = JSON.parse(backupRaw);
-        if (Array.isArray(parsedBackup) && parsedBackup.length > 0) localData = parsedBackup;
+        if (Array.isArray(parsedBackup)) localData = parsedBackup;
       }
     } catch (_) {}
   }
@@ -599,7 +595,7 @@ async function loadPlaces() {
       const sessRaw = sessionStorage.getItem("istanbul_gezi_places_session");
       if (sessRaw) {
         const parsedSess = JSON.parse(sessRaw);
-        if (Array.isArray(parsedSess) && parsedSess.length > 0) localData = parsedSess;
+        if (Array.isArray(parsedSess)) localData = parsedSess;
       }
     } catch (_) {}
   }
@@ -617,22 +613,38 @@ async function loadPlaces() {
     console.log("Mekanlar localStorage hafızasından yüklendi! 📦", resolved.length);
   }
 
-  // Akıllı Birleştirme: Tüm kaynaklardaki ek mekanları asla kaybetmeden birleştir
+  // Akıllı Birleştirme: Ek mekanları asla kaybetmeden birleştir, ANCAK silinmiş olanları ASLA ekleme!
   if (resolved && Array.isArray(resolved)) {
     const existingIds = new Set(resolved.map(p => p.id));
     const allCandidates = [...(serverPlaces || []), ...(idbPlaces || []), ...(localData || [])];
     allCandidates.forEach(cand => {
-      if (cand && cand.id && !existingIds.has(cand.id)) {
+      if (cand && cand.id && !existingIds.has(cand.id) && !deletedIds.has(cand.id)) {
         resolved.push(cand);
         existingIds.add(cand.id);
       }
     });
   }
 
-  // Eğer hiçbir kaynakta veri bulunamadıysa başlangıç mekanlarını ata
-  if (!resolved || resolved.length === 0) {
-    resolved = [...DEFAULT_PLACES];
+  // Silinen mekanları resolved listesinden de kesinlikle filtrele
+  if (resolved && Array.isArray(resolved)) {
+    resolved = resolved.filter(p => p && p.id && !deletedIds.has(p.id));
   }
+
+  // İlk ziyaret kontrolü:
+  // Kullanıcı daha önce siteyi açmışsa, boş liste olsa bile (tüm mekanları bilerek sildiyse)
+  // varsayılan mekanları ZORLA geri getirme!
+  const wasInitialized = localStorage.getItem("gezi_initialized") === "true";
+
+  if (!wasInitialized && (!resolved || resolved.length === 0)) {
+    // Sadece siteyi hayatında ilk defa açan kullanıcıya (silinmemiş olan) başlangıç mekanlarını ata
+    resolved = DEFAULT_PLACES.filter(dp => !deletedIds.has(dp.id));
+  } else if (!resolved) {
+    resolved = [];
+  }
+
+  try {
+    localStorage.setItem("gezi_initialized", "true");
+  } catch (_) {}
 
   // Fırat ve Zeliha kullanıcı rozetlerini güvenceye al
   const defaultUserMap = {};
@@ -649,7 +661,7 @@ async function loadPlaces() {
 }
 
 function savePlaces() {
-  if (!isStorageLoaded && (!places || places.length === 0)) return;
+  if (!isStorageLoaded) return;
 
   updateStats();
   renderDistrictDropdowns();
@@ -657,16 +669,14 @@ function savePlaces() {
   // 1. Sabit diske (places_data.json) yaz
   syncPlacesToServer(places);
 
-  // 2. IndexedDB kalıcı veritabanına yaz
+  // 2. IndexedDB kalıcı veritabanına yaz (boş liste olsa bile silinmiş durum kalıcı işlensin)
   idbSaveAllPlaces(places);
 
   // 3. localStorage ve güvenlik yedek anahtarına yaz
   try {
     const dataStr = JSON.stringify(places);
     localStorage.setItem("istanbul_gezi_places", dataStr);
-    if (places && places.length > 0) {
-      localStorage.setItem("istanbul_gezi_places_backup", dataStr);
-    }
+    localStorage.setItem("istanbul_gezi_places_backup", dataStr);
   } catch (e) {
     console.warn("localStorage kotası aşıldı, hafifletilmiş yedekleme yapılıyor:", e);
     try {
@@ -1470,6 +1480,7 @@ window.deletePlace = function(id) {
   const p = places.find(x => x.id === id);
   if (!p) return;
   if (confirm(`"${p.name}" mekanını silmek istediğinize emin misiniz?`)) {
+    markPlaceDeleted(id);
     places = places.filter(x => x.id !== id);
     savePlaces();
     renderPlaces();

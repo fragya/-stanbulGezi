@@ -89,31 +89,5 @@
     "lat": 41.0440,
     "lng": 29.0030,
     "createdAt": 1728700600000
-  },
-  {
-    "id": "p8",
-    "name": "Galata Kulesi & Meydanı",
-    "district": "Beyoğlu",
-    "category": "Gezilecek Yer",
-    "score": 9.6,
-    "addedBy": "Zeliha",
-    "favorite": "Tarihi Kule Manzarası & Galata Sokakları Yürüyüşü",
-    "notes": "Gün batımında tarihi yarımada ve Boğaz manzarası büyüleyici.",
-    "lat": 41.0256,
-    "lng": 28.9741,
-    "createdAt": 1728700700000
-  },
-  {
-    "id": "p9",
-    "name": "Moda Sahili & İskele Parkı",
-    "district": "Moda",
-    "category": "Gezilecek Yer",
-    "score": 9.5,
-    "addedBy": "Zeliha",
-    "favorite": "Sahil Yürüyüşü, Çimlerde Oturma, Tarihi İskele",
-    "notes": "Kadıköy turunun vazgeçilmez açık hava ve dinlenme noktası.",
-    "lat": 40.9790,
-    "lng": 29.0250,
-    "createdAt": 1728700800000
   }
 ]
